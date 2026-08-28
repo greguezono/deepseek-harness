@@ -253,19 +253,23 @@ type SessionTreeProps = Pick<
   onSessionArchive: (sessionId: SessionNode['id']) => void
   /** Session order behavior: fixed after edits, or additionally promoted by user activity. */
   orderBy: SessionOrderBy
+  /** Render each expanded Workspace's archived subsection. */
+  showArchived: boolean
 }
 
 /** The scrolling session tree; unmounting drops the sessions subscription and expand-all state. */
 function SessionTree({
   useSessions, startSession, open, forkSession, workspaces, archivedSessionIds,
   onRenameRequest, onDeleteRequest, onSessionRename, onSessionArchive,
-  insertWorkspaceBefore, insertSessionBefore, orderBy,
+  insertWorkspaceBefore, insertSessionBefore, orderBy, showArchived,
   groupExpansion, setGroupExpanded,
   sessionOrderByAccount, sessionUpdatedAtByAccount, syncSessionOrderAccount, setSessionOrder, home, t,
 }: SessionTreeProps) {
   const list = useSessions(s => s)
   const current = list.current
   const [expandedSessionGroups, setExpandedSessionGroups] = useState<string[]>([])
+  // Archived overflow is counted separately from the live rows above it.
+  const [expandedArchivedGroups, setExpandedArchivedGroups] = useState<string[]>([])
   // Transient drag marker state; the selected mode owns the resulting order.
   const [drag, setDrag] = useState<DragState | null>(null)
   const sessionDropCommitted = useRef(false)
@@ -331,11 +335,12 @@ function SessionTree({
   const groups = useMemo(
     () => deriveGroups(list, orderedWorkspaces, archivedSessionIds, {
       expandedGroups,
+      showArchived,
       ...(sessionOrderByAccount[UNGROUPED_KEY] === undefined
         ? {}
         : { ungroupedOrder: sessionOrderByAccount[UNGROUPED_KEY] }),
     }),
-    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, sessionOrderByAccount],
+    [list, orderedWorkspaces, archivedSessionIds, expandedGroups, showArchived, sessionOrderByAccount],
   )
   const now = Date.now()
   const commitSessionDrag = (activeDrag: DragState, over: NonNullable<DragState['over']>): void => {
@@ -465,6 +470,7 @@ function SessionTree({
                 onToggle={() => {
                   if (group.expanded) {
                     setExpandedSessionGroups(keys => keys.filter(key => key !== group.key))
+                    setExpandedArchivedGroups(keys => keys.filter(key => key !== group.key))
                   }
                   setGroupExpanded(group.key, !group.expanded)
                 }}
@@ -543,6 +549,40 @@ function SessionTree({
                     ? t('sessions.collapse')
                     : t('sessions.expand', { n: group.sessions.length - COLLAPSED_SESSION_LIMIT })}
                 </button>
+              )}
+              {group.archivedSessions.length > 0 && (
+                <>
+                  <div className={css.archivedHeading}>{t('archived.heading')}</div>
+                  {(expandedArchivedGroups.includes(group.key)
+                    ? group.archivedSessions
+                    : group.archivedSessions.slice(0, COLLAPSED_SESSION_LIMIT)
+                  ).map(node => (
+                    <SessionNodeItem
+                      key={node.id}
+                      node={node}
+                      currentId={current}
+                      now={now}
+                      onOpen={open}
+                      onRename={onSessionRename}
+                      onFork={forkSession}
+                      onArchive={onSessionArchive}
+                      archived
+                      t={t}
+                    />
+                  ))}
+                  {group.archivedSessions.length > COLLAPSED_SESSION_LIMIT && (
+                    <button
+                      type="button"
+                      className={css.sessionOverflowButton}
+                      aria-expanded={expandedArchivedGroups.includes(group.key)}
+                      onClick={() => { setExpandedArchivedGroups(keys => toggled(keys, group.key)) }}
+                    >
+                      {expandedArchivedGroups.includes(group.key)
+                        ? t('sessions.collapse')
+                        : t('sessions.expand', { n: group.archivedSessions.length - COLLAPSED_SESSION_LIMIT })}
+                    </button>
+                  )}
+                </>
               )}
             </div>
           )
@@ -1205,6 +1245,7 @@ export function WorkspaceBrowser({
                 insertWorkspaceBefore={insertWorkspaceBefore}
                 insertSessionBefore={insertSessionBefore}
                 orderBy={orderBy}
+                showArchived={showArchived}
                 home={home}
                 t={t}
                 onRenameRequest={(workspaceId, currentTitle) => {

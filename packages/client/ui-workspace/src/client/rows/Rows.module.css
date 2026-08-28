@@ -24,6 +24,11 @@
   background: var(--dsw-alias-interactive-bg-hover);
 }
 
+/* Archived rows read as inactive beside the live sessions above them. */
+.sessionRow.archived .title {
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .searchResultRow {
   display: flex;
   flex-direction: column;

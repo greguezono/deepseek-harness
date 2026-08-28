@@ -448,6 +448,15 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+/* Separates a Workspace's archived rows from its live ones; aligned with the
+   session titles above it. */
+.archivedHeading {
+  padding: 6px 12px 2px 28px;
+  font-size: 12px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
 .empty {
   padding: 16px 12px;
   color: var(--dsw-alias-label-tertiary);

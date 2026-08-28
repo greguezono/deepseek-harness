@@ -194,6 +194,72 @@ describe('WorkspaceBrowser', () => {
     expect(setAllowArchivedCurrent).toHaveBeenLastCalledWith(false)
   })
 
+  it('shows five newest archived rows under a workspace and opens on click', () => {
+    const archived = ['a6', 'a5', 'a4', 'a3', 'a2', 'a1'].map((id, i) => summary(id, 10 - i))
+    const live = summary('live-s', 1)
+    const b = mount({
+      useSessions: hook(sessionState([live, ...archived])),
+      useWorkspaces: hook(workspaceState(
+        [workspace('alpha', ['live-s', ...archived.map(s => s.id as string)])],
+        archived.map(s => s.id),
+      )),
+    })
+    act(() => {
+      b.store.actions.setGroupExpanded('alpha', true)
+      b.store.actions.setShowArchived(true)
+    })
+    rerender(b, {})
+    expect(screen.getByText('已归档')).toBeTruthy()
+    // Newest five by updatedAt; the sixth waits behind Show more.
+    expect(screen.getByText('a6')).toBeTruthy()
+    expect(screen.queryByText('a1')).toBeNull()
+    expect(screen.getByText('live-s')).toBeTruthy()
+
+    fireEvent.click(screen.getByText('展开其余 1 个会话'))
+    expect(screen.getByText('a1')).toBeTruthy()
+
+    fireEvent.click(screen.getByText('a6'))
+    expect(b.props.open).toHaveBeenCalledWith(sid('a6'))
+    // Archived rows are read-only: no row action menu.
+    expect(screen.queryByRole('button', { name: '会话“a6”的操作' })).toBeNull()
+  })
+
+  it('hides archived rows when the toggle is off, the set is empty, or the list is flat', () => {
+    const gone = summary('gone', 5)
+    const live = summary('live-s', 1)
+    const b = mount({
+      useSessions: hook(sessionState([live, gone])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['live-s', 'gone'])], [gone.id])),
+    })
+    act(() => { b.store.actions.setGroupExpanded('alpha', true) })
+    rerender(b, {})
+    // Toggle off (the default): no heading, no archived row.
+    expect(screen.queryByText('已归档')).toBeNull()
+    expect(screen.queryByText('gone')).toBeNull()
+
+    // Flat mode ignores the toggle entirely.
+    act(() => {
+      b.store.actions.setShowArchived(true)
+      b.store.actions.setGroupBy('flat')
+    })
+    rerender(b, {})
+    expect(screen.queryByText('gone')).toBeNull()
+  })
+
+  it('omits the archived heading for a workspace with nothing archived', () => {
+    const b = mount({
+      useSessions: hook(sessionState([summary('live-s', 1)])),
+      useWorkspaces: hook(workspaceState([workspace('alpha', ['live-s'])])),
+    })
+    act(() => {
+      b.store.actions.setGroupExpanded('alpha', true)
+      b.store.actions.setShowArchived(true)
+    })
+    rerender(b, {})
+    expect(screen.queryByText('已归档')).toBeNull()
+    expect(screen.getByText('live-s')).toBeTruthy()
+  })
+
   it('persists flat-list drag order locally and applies Last updated within that account', async () => {
     const insertSessionBefore = vi.fn(async () => {})
     const sessions = sessionState([summary('one', 3), summary('two', 2), summary('three', 1)])
