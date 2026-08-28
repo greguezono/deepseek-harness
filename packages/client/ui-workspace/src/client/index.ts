@@ -13,7 +13,9 @@ import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: pulls the locale plugin's Context merge (ctx.locale).
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { WorkspaceBrowserInjected, WorkspacePickerInjected } from './contract/slots.ts'
+import { ArchivedReadOnlyComposer } from './ArchivedReadOnlyComposer.tsx'
 import { createWorkspaceViewStore } from './stores.ts'
 import { WorkspaceBrowser } from './WorkspaceBrowser.tsx'
 import { WorkspacePicker } from './WorkspacePicker.tsx'
@@ -120,6 +122,27 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
     },
     WorkspaceBrowser,
+  ))
+  // Archived sessions open for reading, so the composer states that instead
+  // of offering a send path the Host would reject.
+  ctx.slots.inject('conversation.composer', () => ctx.slots.register(
+    {
+      name: 'conversation.composer',
+      priority: -20,
+      locale: NS,
+      select: (owner: ComposerChainProps) => {
+        try {
+          const id = owner.session?.sessionId
+          if (id === undefined) return null
+          return ctx.workspaces.list.getSnapshot().archivedSessionIds.includes(id) ? true : null
+        } catch {
+          // A failed archive-set read leaves the live composer in place rather
+          // than locking a writable session behind the read-only frame.
+          return null
+        }
+      },
+    },
+    ArchivedReadOnlyComposer,
   ))
   ctx.slots.inject('conversation.hero.workspace', () => ctx.slots.register(
     {
