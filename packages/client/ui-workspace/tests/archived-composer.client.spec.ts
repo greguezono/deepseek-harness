@@ -7,9 +7,11 @@ import { SlotRegistry, type SessionId, type WorkspaceListState } from '@deepseek
 import type { ComposerChainProps } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { createElement } from 'react'
+import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
+import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import { apply, inject } from '../src/client/index.ts'
-import { ArchivedReadOnlyComposer } from '../src/client/ArchivedReadOnlyComposer.tsx'
-import { zh, type WorkspaceKey } from '../src/client/locales.ts'
+import { ArchivedReadOnlyComposer, type ArchivedReadOnlyComposerProps } from '../src/client/ArchivedReadOnlyComposer.tsx'
+import { zh } from '../src/client/locales.ts'
 
 const sid = (id: string) => id as SessionId
 
@@ -60,7 +62,8 @@ describe('archived read-only composer', () => {
   })
 
   it('states that an archived session is readable but not sendable', () => {
-    render(createElement(ArchivedReadOnlyComposer, { t: (key: WorkspaceKey) => zh[key] }))
+    const t: ArchivedReadOnlyComposerProps['t'] = makeTranslate(zh, commonZh)
+    render(createElement(ArchivedReadOnlyComposer, { t }))
     expect(screen.getByText('已归档会话')).toBeTruthy()
     expect(screen.getByText('可以查看消息，但不能发送。')).toBeTruthy()
   })

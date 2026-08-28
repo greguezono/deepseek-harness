@@ -30,6 +30,7 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/workspace-management', i
 const SEED = fileURLToPath(new URL('./snapshots/seeded-history/seed.jsonl', import.meta.url))
 const MODE = webSnapshotMode()
 const BROWSER_EXPECTED = join(SNAPSHOT_DIR, 'directory-browser.expected.md')
+const ARCHIVED_EXPECTED = join(SNAPSHOT_DIR, 'archived-view.expected.md')
 const SEED_ID = 'workspace-management-web-e2e'
 // Both waits exceed ui-primitives' 200ms POINTER_GRACE_MS. Keep them above
 // that value if the shared setting changes.
@@ -597,6 +598,47 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('shows archived sessions greyed under their group and opens them read-only', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-ws-archived-view'))
+    // Runs after the archive scenario above: the seeded session is already in
+    // the registry-global set, and its row is hidden.
+    expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([SessionId(SEED_ID)])
+    await page.getByRole('button', { name: 'View options' }).click()
+    await page.getByRole('menuitem', { name: 'Show archived' }).click()
+    // The Ungrouped bucket returns for its archived-only member; expand it.
+    await expect.poll(
+      () => page.getByText('Ungrouped', { exact: true }).count(),
+      { timeout: 10_000 },
+    ).toBe(1)
+    const ungroupedRow = page.getByText('Ungrouped', { exact: true }).locator('..').locator('..')
+    await expect.poll(async () => {
+      if (await ungroupedRow.getAttribute('aria-expanded') !== 'true') {
+        await page.getByText('Ungrouped', { exact: true }).click()
+        await page.waitForTimeout(50)
+      }
+      return await ungroupedRow.getAttribute('aria-expanded')
+    }, { timeout: 5_000 }).toBe('true')
+    await expect.poll(
+      () => page.getByText('Archived', { exact: true }).count(),
+      { timeout: 10_000 },
+    ).toBe(1)
+    const archivedRow = ungroupedRow.locator('..').locator('[role="treeitem"]').last()
+    const rowTitle = await archivedRow.locator('[class*="title"]').innerText()
+    // Read-only: the archived row carries no session actions button.
+    expect(await archivedRow.locator('button[aria-label^="Session actions for "]').count()).toBe(0)
+    const treeSnapshot = await captureStableAria(page, '[class*="tree"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(ARCHIVED_EXPECTED, treeSnapshot, MODE)
+
+    await archivedRow.click()
+    // Opening an archived session replaces the composer with the read-only frame.
+    await expect.poll(
+      () => page.getByText('You can read messages, but you cannot send.', { exact: true }).count(),
+      { timeout: 15_000 },
+    ).toBe(1)
+    expect(await page.getByText(rowTitle, { exact: true }).count()).toBeGreaterThan(0)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
+
   it('opens folders with identical basenames as distinct workspaces', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ws-duplicate-basename'))
     const firstPath = join(scaffold.workspaceCwd, 'same-basename-a', 'xx')
@@ -620,8 +662,10 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
 
   it.skipIf(MODE === 'record')('issued zero model calls and stayed clean', async () => {
     expect(tripwire.warnings).toEqual([])
-    // The directory-browser aria golden is this spec's one owned artifact;
-    // the seed it reuses is owned (and inventory-guarded) by seeded-history.
-    await assertFixtureInventory(SNAPSHOT_DIR, ['.gitkeep', 'directory-browser.expected.md'])
+    // The aria goldens are this spec's owned artifacts; the seed they reuse is
+    // owned (and inventory-guarded) by seeded-history.
+    await assertFixtureInventory(SNAPSHOT_DIR, [
+      '.gitkeep', 'archived-view.expected.md', 'directory-browser.expected.md',
+    ])
   })
 })
