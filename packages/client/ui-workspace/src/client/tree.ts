@@ -45,13 +45,15 @@ export interface GroupNode {
   /** Workspace creation time (epoch ms); absent only for the ungrouped bucket. */
   createdAt: number | undefined
   label: string
-  /** Total visible sessions in the group. */
+  /** Total live sessions in the group (archived members are not counted). */
   sessionCount: number
   expanded: boolean
   /** The group contains the selected session (active folder tint; supplied here so the renderer never scans). */
   containsCurrent: boolean
   /** Visible session rows (empty while the group is folded). */
   sessions: readonly SessionNode[]
+  /** Archived members; empty while folded, when the toggle is off, or if lookup fails. */
+  archivedSessions: readonly SessionNode[]
 }
 
 /** One flat search row combining list metadata with an optional content match. */
@@ -80,6 +82,8 @@ export interface TreeView {
   expandedGroups: readonly string[]
   /** Browser-local order for Sessions without a backing Workspace account. */
   ungroupedOrder?: readonly string[]
+  /** When true, expanded groups include archived members. */
+  showArchived?: boolean
 }
 
 interface Group {
@@ -89,6 +93,8 @@ interface Group {
   createdAt: number | undefined
   label: string
   sessions: SessionSummary[]
+  /** Workspace sessionIds, or every unaccounted list id for Ungrouped. */
+  memberIds: readonly SessionId[]
 }
 
 /**
@@ -139,12 +145,13 @@ function buildGroup(
   label: string,
   members: readonly SessionSummary[],
   order: 'account' | 'recency',
+  memberIds: readonly SessionId[],
 ): Group {
   const sessions = [...members]
   // Real Workspace order comes from sessionIds. Ungrouped falls back to
   // recency until the browser supplies its persisted local order.
   if (order === 'recency') sessions.sort(byRecency)
-  return { key, workspaceId, cwd, createdAt, label, sessions }
+  return { key, workspaceId, cwd, createdAt, label, sessions, memberIds }
 }
 
 /** Apply a stored Ungrouped order and append newly loose Sessions by recency. */
@@ -169,19 +176,26 @@ function orderedUngrouped(members: readonly SessionSummary[], stored: readonly s
  * Group Sessions by Host Workspace: one group per entity in stable Host
  * order, with members resolved from sessionIds in their stored order. Sessions
  * outside every Workspace trail in the browser-local Ungrouped order, which
- * falls back to recency before that order is initialized.
+ * falls back to recency before that order is initialized. When
+ * `includeArchived` is true, Ungrouped still appears for archived-only strays.
  */
 function groupByWorkspace(
   list: SessionListState,
   workspaces: readonly WorkspaceView[],
   archived: ReadonlySet<SessionId>,
   ungroupedOrder: readonly string[] | undefined,
+  includeArchived: boolean,
 ): Group[] {
   const groups: Group[] = []
   const accounted = new Set<SessionId>()
   for (const workspace of workspaces) {
     const members: SessionSummary[] = []
     for (const id of workspace.sessionIds) {
+      // Archived ids stay accounted without a live lookup so a hostile archive row cannot fail the live tree.
+      if (archived.has(id)) {
+        accounted.add(id)
+        continue
+      }
       const summary = list.byId[id]
       if (summary === undefined) continue // account may lead the list pull; the row appears when the summary lands
       accounted.add(id)
@@ -191,13 +205,17 @@ function groupByWorkspace(
     groups.push(buildGroup(
       workspace.workspaceId, workspace.workspaceId, workspace.path,
       Date.parse(workspace.createdAt), workspace.title, members, 'account',
+      workspace.sessionIds,
     ))
   }
-  const stray = list.ids
+  const ungroupedIds = list.ids.filter(id => !accounted.has(id))
+  const stray = ungroupedIds
+    .filter(id => !archived.has(id))
     .map(id => list.byId[id])
     .filter((s): s is SessionSummary =>
-      s !== undefined && !accounted.has(s.id) && sessionVisible(s, list.current, archived))
-  if (stray.length > 0) {
+      s !== undefined && sessionVisible(s, list.current, archived))
+  const hasArchivedStray = includeArchived && ungroupedIds.some(id => archived.has(id))
+  if (stray.length > 0 || hasArchivedStray) {
     groups.push(buildGroup(
       UNGROUPED_KEY,
       undefined,
@@ -206,6 +224,7 @@ function groupByWorkspace(
       UNGROUPED_LABEL,
       ungroupedOrder === undefined ? stray : orderedUngrouped(stray, ungroupedOrder),
       ungroupedOrder === undefined ? 'recency' : 'account',
+      ungroupedIds,
     ))
   }
   return groups
@@ -228,17 +247,67 @@ function sessionNode(
 }
 
 /**
+ * Collect archived members of one group, newest-first.
+ * Blank and subagent-origin rows are omitted.
+ * @param memberIds - workspace sessionIds, or unaccounted ids for Ungrouped.
+ * @param list - sessions list snapshot.
+ * @param archived - registry-global archive set.
+ * @param descendants - subagent descendant index for row projection.
+ * @returns archived session rows sorted by recency.
+ */
+function collectArchivedMembers(
+  memberIds: readonly SessionId[],
+  list: SessionListState,
+  archived: ReadonlySet<SessionId>,
+  descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+): readonly SessionNode[] {
+  const members: SessionSummary[] = []
+  for (const id of memberIds) {
+    if (!archived.has(id)) continue
+    const summary = list.byId[id]
+    if (summary === undefined || summary.blank || summary.origin === 'subagent') continue
+    members.push(summary)
+  }
+  members.sort(byRecency)
+  return members.map(session => sessionNode(session, descendants))
+}
+
+/**
+ * Archived members of one group, newest-first.
+ * Lookup failure yields [] so an archived row cannot fail the live tree.
+ * @param memberIds - workspace sessionIds, or unaccounted ids for Ungrouped.
+ * @param list - sessions list snapshot.
+ * @param archived - registry-global archive set.
+ * @param descendants - subagent descendant index for row projection.
+ * @returns archived session rows, or [] if lookup throws.
+ */
+function archivedMembersForGroup(
+  memberIds: readonly SessionId[],
+  list: SessionListState,
+  archived: ReadonlySet<SessionId>,
+  descendants: ReadonlyMap<SessionId, SubagentDescendantSummary>,
+): readonly SessionNode[] {
+  try {
+    return collectArchivedMembers(memberIds, list, archived, descendants)
+  } catch {
+    // An archived member lookup must not fail the live tree.
+    return []
+  }
+}
+
+/**
  * Derive the workspace browser groups with every session as a top-level row.
  *
  * Every group shows; sessions populate under expanded groups in the selected
  * local order. Blank sessions are excluded except for the selected
- * provisional New Session row; archived sessions are excluded everywhere.
- * Content search lives outside this derivation
+ * provisional New Session row. Live rows never include archived sessions;
+ * when {@link TreeView.showArchived} is true, expanded groups also carry
+ * archived members. Content search lives outside this derivation
  * (see {@link deriveSearchResults}).
  * @param list - sessions list snapshot (`current` feeds containsCurrent).
  * @param workspaces - real workspaces in stable Host order.
  * @param archivedSessionIds - registry-global archive set.
- * @param view - local expansion arrays.
+ * @param view - local expansion arrays and the archived-member toggle.
  * @returns group sections in render order.
  */
 export function deriveGroups(
@@ -249,13 +318,21 @@ export function deriveGroups(
 ): GroupNode[] {
   const archived = new Set(archivedSessionIds)
   const expandedGroups = new Set(view.expandedGroups)
-  const descendants = indexSubagentDescendants(list.byId)
+  // Index live rows only. Object.keys never invokes a getter, so an archived
+  // row that fails to resolve cannot fail the live tree.
+  const liveById: Record<SessionId, SessionSummary> = {}
+  for (const id of Object.keys(list.byId) as SessionId[]) {
+    const summary = archived.has(id) ? undefined : list.byId[id]
+    if (summary !== undefined) liveById[id] = summary
+  }
+  const descendants = indexSubagentDescendants(liveById)
+  const includeArchived = view.showArchived === true
   const currentGroup = list.current === undefined
     ? undefined
     : (workspaces.find(w => w.sessionIds.includes(list.current as SessionId))?.workspaceId as string | undefined)
         ?? UNGROUPED_KEY
   const groups: GroupNode[] = []
-  for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder)) {
+  for (const g of groupByWorkspace(list, workspaces, archived, view.ungroupedOrder, includeArchived)) {
     const expanded = expandedGroups.has(g.key)
     groups.push({
       key: g.key,
@@ -267,6 +344,9 @@ export function deriveGroups(
       expanded,
       containsCurrent: g.key === currentGroup,
       sessions: expanded ? g.sessions.map(session => sessionNode(session, descendants)) : [],
+      archivedSessions: includeArchived && expanded
+        ? archivedMembersForGroup(g.memberIds, list, archived, descendants)
+        : [],
     })
   }
   return groups
