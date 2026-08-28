@@ -212,4 +212,14 @@ export class TestWorkspaces implements IWorkspaces {
       draft.archivedSessionIds = [...draft.archivedSessionIds, sessionId]
     })
   }
+
+  /**
+   * Opt the projection sweep out of clearing an archived current session.
+   * Recorded; the default is a no-op (the double has no projection sweep).
+   * @param allow - true while a grouping surface is showing archived rows.
+   */
+  setAllowArchivedCurrent(allow: boolean): void {
+    this.calls.push({ method: 'setAllowArchivedCurrent', args: [allow] })
+    this.stubs.get('setAllowArchivedCurrent')?.(allow)
+  }
 }

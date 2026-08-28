@@ -87,8 +87,16 @@ export interface IWorkspaces {
   /**
    * Archive a session into the registry-global set (hidden from grouping
    * surfaces; session log and accounting slot remain). Archiving the current
-   * session clears the selection into the New Session view state.
+   * session clears the selection into the New Session view state unless
+   * `allowArchivedCurrent` is set.
    * @param sessionId - session to archive.
    */
   archiveSession(sessionId: SessionId): Promise<void>
+  /**
+   * Opt the projection sweep out of clearing an archived current session.
+   * Default false. Pass false to restore today's clear. Callers must clear
+   * this from an effect disposer so unload restores the default.
+   * @param allow - true while a grouping surface is showing archived rows.
+   */
+  setAllowArchivedCurrent(allow: boolean): void
 }

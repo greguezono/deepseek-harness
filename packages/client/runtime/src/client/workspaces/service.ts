@@ -57,6 +57,7 @@ export class WorkspaceRuntime implements IWorkspaces {
   private readonly connecting = new Map<WorkspaceId, Promise<SessionId>>()
   /** Guards the runtime-owned one-shot initial-selection subscription. */
   private initialSelectionStarted = false
+  private allowArchivedCurrent = false
 
   /**
    * @param ctx - client root context.
@@ -284,7 +285,7 @@ export class WorkspaceRuntime implements IWorkspaces {
   /**
    * Archive a session into the registry-global set. Clearing an archived
    * current selection is the projection sweep's job (one rule for the local
-   * echo and a remote tab's frame alike).
+   * echo and a remote tab's frame alike) unless `allowArchivedCurrent` is true.
    * @param sessionId - session to archive.
    */
   async archiveSession(sessionId: SessionId): Promise<void> {
@@ -330,6 +331,12 @@ export class WorkspaceRuntime implements IWorkspaces {
     this.manager.handleConnected()
   }
 
+  setAllowArchivedCurrent(allow: boolean): void {
+    if (this.allowArchivedCurrent === allow) return
+    this.allowArchivedCurrent = allow
+    this.project()
+  }
+
   private project(): void {
     const workspace = this.manager.getSnapshot()
     const sessions = this.sessions.list.getSnapshot()
@@ -339,7 +346,11 @@ export class WorkspaceRuntime implements IWorkspaces {
     // every install path with one rule: the local unary echo, another tab's
     // changed frame, and a reconnect baseline restoring a persisted
     // selection that was archived while this client was away.
-    if (sessions.current !== undefined && workspace.archivedSessionIds.includes(sessions.current)) {
+    if (
+      !this.allowArchivedCurrent
+      && sessions.current !== undefined
+      && workspace.archivedSessionIds.includes(sessions.current)
+    ) {
       this.sessions.clear()
     }
     this.list.set({

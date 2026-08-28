@@ -360,8 +360,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: 'archiveSession(sessionId: SessionId): Promise<void>',
-        description: 'Archive a session into the registry-global set (hidden from grouping surfaces; session log and accounting slot remain). Archiving the current session clears the selection into the New Session view state.',
+        description: 'Archive a session into the registry-global set (hidden from grouping surfaces; session log and accounting slot remain). Archiving the current session clears the selection into the New Session view state unless `allowArchivedCurrent` is set.',
         parameters: [{ name: 'sessionId', description: 'session to archive.' }],
+      },
+      {
+        signature: 'setAllowArchivedCurrent(allow: boolean): void',
+        description: 'Opt the projection sweep out of clearing an archived current session. Default false. Pass false to restore today\'s clear. Callers must clear this from an effect disposer so unload restores the default.',
+        parameters: [{ name: 'allow', description: 'true while a grouping surface is showing archived rows.' }],
       },
     ],
   },

@@ -519,6 +519,26 @@ describe('WorkspaceRuntime', () => {
     await workspaces.refresh()
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
   })
+
+  it('skips clearing an archived current only while allowArchivedCurrent is true, and restores the clear when the flag drops', async () => {
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onList = () => Promise.resolve(ok({
+      items: [{ sessionId: sid('s-open'), updatedAt: 1, running: false, blank: false }],
+    }) as never)
+    await sessions.refresh()
+    sessions.open(sid('s-open'))
+    workspaces.setAllowArchivedCurrent(true)
+    // Repeating the same value is a no-op and must not clear.
+    workspaces.setAllowArchivedCurrent(true)
+    api.onWorkspaceArchiveSession = () => Promise.resolve(ok({ archivedSessionIds: [sid('s-open')] }))
+    await workspaces.archiveSession(sid('s-open'))
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+    workspaces.setAllowArchivedCurrent(false)
+    expect(sessions.list.getSnapshot().current).toBeUndefined()
+  })
 })
 
 describe('startInitialSelection', () => {
