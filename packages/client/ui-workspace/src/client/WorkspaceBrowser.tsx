@@ -222,6 +222,26 @@ function workspaceGroupHalf(e: { clientY: number; currentTarget: HTMLElement }):
   return e.clientY < rect.top + rect.height / 2 ? 'before' : 'after'
 }
 
+/** Show more / Show less for a session run that exceeds the collapsed cap; renders nothing below it. */
+function SessionOverflowButton({ total, expanded, onToggle, t }: {
+  total: number
+  expanded: boolean
+  onToggle: () => void
+  t: WorkspaceBrowserProps['t']
+}) {
+  if (total <= COLLAPSED_SESSION_LIMIT) return null
+  return (
+    <button
+      type="button"
+      className={css.sessionOverflowButton}
+      aria-expanded={expanded}
+      onClick={onToggle}
+    >
+      {expanded ? t('sessions.collapse') : t('sessions.expand', { n: total - COLLAPSED_SESSION_LIMIT })}
+    </button>
+  )
+}
+
 type SessionTreeProps = Pick<
   WorkspaceBrowserProps,
   'useSessions' | 'startSession' | 'open' | 'forkSession'
@@ -539,18 +559,12 @@ function SessionTree({
                   />
                 )
               })}
-              {group.sessions.length > COLLAPSED_SESSION_LIMIT && (
-                <button
-                  type="button"
-                  className={css.sessionOverflowButton}
-                  aria-expanded={expandedSessionGroups.includes(group.key)}
-                  onClick={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
-                >
-                  {expandedSessionGroups.includes(group.key)
-                    ? t('sessions.collapse')
-                    : t('sessions.expand', { n: group.sessions.length - COLLAPSED_SESSION_LIMIT })}
-                </button>
-              )}
+              <SessionOverflowButton
+                total={group.sessions.length}
+                expanded={expandedSessionGroups.includes(group.key)}
+                onToggle={() => { setExpandedSessionGroups(keys => toggled(keys, group.key)) }}
+                t={t}
+              />
               {group.archivedSessions.length > 0 && (
                 <IsolatedBoundary>
                   <div className={css.archivedHeading}>{t('archived.heading')}</div>
@@ -571,18 +585,12 @@ function SessionTree({
                       t={t}
                     />
                   ))}
-                  {group.archivedSessions.length > COLLAPSED_SESSION_LIMIT && (
-                    <button
-                      type="button"
-                      className={css.sessionOverflowButton}
-                      aria-expanded={expandedArchivedGroups.includes(group.key)}
-                      onClick={() => { setExpandedArchivedGroups(keys => toggled(keys, group.key)) }}
-                    >
-                      {expandedArchivedGroups.includes(group.key)
-                        ? t('sessions.collapse')
-                        : t('sessions.expand', { n: group.archivedSessions.length - COLLAPSED_SESSION_LIMIT })}
-                    </button>
-                  )}
+                  <SessionOverflowButton
+                    total={group.archivedSessions.length}
+                    expanded={expandedArchivedGroups.includes(group.key)}
+                    onToggle={() => { setExpandedArchivedGroups(keys => toggled(keys, group.key)) }}
+                    t={t}
+                  />
                 </IsolatedBoundary>
               )}
             </div>
