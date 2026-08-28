@@ -20,6 +20,7 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { WorkspaceBrowserProps } from './contract/slots.ts'
 import type { SessionNode, SessionOrderBy } from './tree.ts'
+import { IsolatedBoundary } from './IsolatedBoundary.tsx'
 import { deriveFlat, deriveGroups, deriveSearchResults, UNGROUPED_KEY } from './tree.ts'
 import { ProjectRowItem, SearchResultItem, SessionNodeItem } from './rows/Rows.tsx'
 import { FLAT_SESSION_ORDER_KEY } from './stores.ts'
@@ -551,7 +552,7 @@ function SessionTree({
                 </button>
               )}
               {group.archivedSessions.length > 0 && (
-                <>
+                <IsolatedBoundary>
                   <div className={css.archivedHeading}>{t('archived.heading')}</div>
                   {(expandedArchivedGroups.includes(group.key)
                     ? group.archivedSessions
@@ -582,7 +583,7 @@ function SessionTree({
                         : t('sessions.expand', { n: group.archivedSessions.length - COLLAPSED_SESSION_LIMIT })}
                     </button>
                   )}
-                </>
+                </IsolatedBoundary>
               )}
             </div>
           )
