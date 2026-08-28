@@ -143,12 +143,16 @@ function nextSessionOrderAccount({
   return { order, updatedAt, changed: orderChanged || timestampsChanged }
 }
 
-/** Grouping and ordering menu; own open state so it resets with the wide chrome. */
-function ViewOptionsMenu({ groupBy, orderBy, onGroupPick, onOrderPick, t }: {
+/** Grouping, ordering, and archived-visibility menu; own open state so it resets with the wide chrome. */
+function ViewOptionsMenu({ groupBy, orderBy, showArchived, onGroupPick, onOrderPick, onArchivedPick, t }: {
   groupBy: 'workspace' | 'flat'
   orderBy: SessionOrderBy
+  /** The Archived row is checked and archived rows render under each group. */
+  showArchived: boolean
   onGroupPick: (mode: 'workspace' | 'flat') => void
   onOrderPick: (mode: SessionOrderBy) => void
+  /** Toggle the archived subsection. */
+  onArchivedPick: (show: boolean) => void
   t: WorkspaceBrowserProps['t']
 }) {
   const [open, setOpen] = useState(false)
@@ -164,11 +168,15 @@ function ViewOptionsMenu({ groupBy, orderBy, onGroupPick, onOrderPick, t }: {
         { type: 'label' as const, id: 'order-by', text: t('orderBy.label') },
         { id: 'manual', label: t('orderBy.manual') },
         { id: 'updated', label: t('orderBy.updated') },
+        { type: 'separator' as const, id: 'archived-separator' },
+        { type: 'label' as const, id: 'archived', text: t('archived.label') },
+        { id: 'archived-toggle', label: t('archived.show') },
       ]}
-      selectedIds={[groupBy, orderBy]}
+      selectedIds={showArchived ? [groupBy, orderBy, 'archived-toggle'] : [groupBy, orderBy]}
       onSelect={(id) => {
         if (id === 'workspace' || id === 'flat') onGroupPick(id)
         else if (id === 'manual' || id === 'updated') onOrderPick(id)
+        else if (id === 'archived-toggle') onArchivedPick(!showArchived)
         setOpen(false)
       }}
       align="end"
@@ -756,6 +764,7 @@ export function WorkspaceBrowser({
   deleteWorkspace,
   insertWorkspaceBefore,
   archiveSession,
+  setAllowArchivedCurrent,
   insertSessionBefore,
   createWorkspace,
   searchSessions,
@@ -774,9 +783,16 @@ export function WorkspaceBrowser({
   const directoryFlowAvailable = useDirectoryFlow(occupied => occupied)
   const groupBy = useStore(s => s.groupBy)
   const orderBy = useStore(s => s.orderBy)
+  const showArchived = useStore(s => s.showArchived)
   const groupExpansion = useStore(s => s.groupExpansion)
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
+  // Only the grouped view renders archived rows, so only it keeps an archived
+  // current session selected. The disposer restores the runtime default.
+  useEffect(() => {
+    setAllowArchivedCurrent(groupBy === 'workspace' && showArchived)
+    return () => { setAllowArchivedCurrent(false) }
+  }, [groupBy, showArchived, setAllowArchivedCurrent])
   const currentBlankSessionId = useSessions((state) => {
     const current = state.current
     return current !== undefined && state.byId[current]?.blank === true ? current : undefined
@@ -1077,8 +1093,10 @@ export function WorkspaceBrowser({
             <ViewOptionsMenu
               groupBy={groupBy}
               orderBy={orderBy}
+              showArchived={showArchived}
               onGroupPick={(mode) => { actions.setGroupBy(mode) }}
               onOrderPick={(mode) => { actions.setOrderBy(mode) }}
+              onArchivedPick={(show) => { actions.setShowArchived(show) }}
               t={t}
             />
           )}
