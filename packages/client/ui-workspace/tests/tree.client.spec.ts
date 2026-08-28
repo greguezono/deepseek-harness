@@ -425,6 +425,13 @@ describe('createWorkspaceViewStore', () => {
     expect(snapshot.sessionOrderByAccount).toEqual({ alpha: ['alpha-session'] })
     expect(snapshot.sessionUpdatedAtByAccount).toEqual({ alpha: { 'alpha-session': 2 } })
   })
+
+  it('defaults showArchived off and toggles it', () => {
+    const store = createWorkspaceViewStore().create()
+    expect(store.getSnapshot().showArchived).toBe(false)
+    store.actions.setShowArchived(true)
+    expect(store.getSnapshot().showArchived).toBe(true)
+  })
 })
 
 describe('workspaceLabel', () => {
