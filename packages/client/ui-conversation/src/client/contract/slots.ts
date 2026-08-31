@@ -621,6 +621,8 @@ export interface ComposerChainProps {
   interactions: readonly PendingInteraction[]
   /** Current conversation facts for feature-owned takeover selectors. */
   session: ConversationSnapshot | undefined
+  /** True when the selected session is in the workspace archive set. */
+  archived: boolean
 }
 
 /** Presentation props supplied to the blank-session brand-mark occupant. */

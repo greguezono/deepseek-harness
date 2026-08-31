@@ -47,6 +47,15 @@ export class DirectoryBrowseError extends Error {
   }
 }
 
+/** Browser-local control for preserving an archived current session. */
+export interface ArchivedCurrentControl {
+  /**
+   * Set whether the grouped archived view keeps an archived current session selected.
+   * @param allow - true while the archived grouped view is active.
+   */
+  setAllowArchivedCurrent(allow: boolean): void
+}
+
 /** Real Workspace object layer and Host actions. */
 export class WorkspaceRuntime implements IWorkspaces {
   /** UI-facing immutable projection; the manager remains wire truth. */
@@ -73,6 +82,7 @@ export class WorkspaceRuntime implements IWorkspaces {
     this.manager.subscribe(() => { this.project() })
     this.sessions.list.subscribe(() => { this.project() })
     ctx.reflect.provide('workspaces', this, undefined)
+    ctx.reflect.provide('workspaceArchivedView', this, undefined)
   }
 
   /**
@@ -331,6 +341,10 @@ export class WorkspaceRuntime implements IWorkspaces {
     this.manager.handleConnected()
   }
 
+  /**
+   * Keep an archived current session selected while the workspace browser shows archived rows.
+   * @param allow - true while the archived grouped view is active.
+   */
   setAllowArchivedCurrent(allow: boolean): void {
     if (this.allowArchivedCurrent === allow) return
     this.allowArchivedCurrent = allow

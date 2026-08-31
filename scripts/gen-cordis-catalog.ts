@@ -161,6 +161,7 @@ export const SERVICE_WALK_EXEMPTIONS: Record<string, string> = {
   slots: 'client-side interface-typed browser service — packages/client/runtime/README.md owns the API',
   theme: 'client-side interface-typed browser service — packages/client/ui-theme/README.md owns the API',
   workspaces: 'client-side interface-typed browser service — packages/client/runtime/README.md owns the API',
+  workspaceArchivedView: 'client-side browser-local archived-session control — packages/client/runtime/README.md owns the API',
 }
 
 /**

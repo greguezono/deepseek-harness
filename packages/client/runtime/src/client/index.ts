@@ -176,6 +176,8 @@ declare module '@deepseek-ai/cordis' {
     sessions: import('./contract/sessions.ts').ISessions
     /** The outward face only; the concrete service stays inside the runtime. */
     workspaces: import('./contract/workspaces.ts').IWorkspaces
+    /** Browser-local control for preserving an archived current session. */
+    workspaceArchivedView: import('./workspaces/service.ts').ArchivedCurrentControl
   }
 }
 

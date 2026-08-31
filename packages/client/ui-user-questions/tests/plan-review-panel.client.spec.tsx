@@ -30,6 +30,7 @@ const seatOver = (dict: Record<string, string>, common: Record<string, string>):
 const kit = {
   sessionId: SID,
   session: undefined,
+  archived: false,
   useSession: (() => { throw new Error('unused') }) as unknown as SnapshotSelectorHook<ConversationSnapshot>,
   useSessions: (() => { throw new Error('unused') }) as unknown as SnapshotSelectorHook<SessionListState>,
   useWorkspaces: (() => { throw new Error('unused') }) as unknown as SnapshotSelectorHook<WorkspaceListState>,

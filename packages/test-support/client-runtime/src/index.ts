@@ -223,6 +223,9 @@ export class SlotTestRuntime {
     this.workspaces = new TestWorkspaces(this.stabilizer)
     ctx.provide('sessions', this.sessions)
     ctx.provide('workspaces', this.workspaces)
+    ctx.provide('workspaceArchivedView', {
+      setAllowArchivedCurrent: () => {},
+    })
     // Capturing install: the production renderer does the rendering; the
     // wrapper only takes the host face for storeOf (no machinery copied).
     const renderer = createSlotRenderer()

@@ -312,7 +312,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
       },
     ],
     ownerProps: [
-      '/**\n * Composer chain currency: what ConversationRoot dispatches at its\n * renderSlotChain site. The owner declares the currency only — never a\n * per-entry contract; takeover packages narrow it in their own selectors\n * (`interactions.find(i => i.kind === ...)`), so new takeover kinds register\n * with zero owner changes.\n */\nexport interface ComposerChainProps {\n  interactions: readonly PendingInteraction[]\n  /** Current conversation facts for feature-owned takeover selectors. */\n  session: ConversationSnapshot | undefined\n}',
+      '/**\n * Composer chain currency: what ConversationRoot dispatches at its\n * renderSlotChain site. The owner declares the currency only — never a\n * per-entry contract; takeover packages narrow it in their own selectors\n * (`interactions.find(i => i.kind === ...)`), so new takeover kinds register\n * with zero owner changes.\n */\nexport interface ComposerChainProps {\n  interactions: readonly PendingInteraction[]\n  /** Current conversation facts for feature-owned takeover selectors. */\n  session: ConversationSnapshot | undefined\n  /** True when the selected session is in the workspace archive set. */\n  archived: boolean\n}',
     ],
     ownerPropsReferences: [
       'ConversationSnapshot',

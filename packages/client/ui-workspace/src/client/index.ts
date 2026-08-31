@@ -45,7 +45,7 @@ const NS = 'workspace'
  * provides a waitable service. apply therefore depends on each slot
  * declaration through `slots.inject()` instead of assuming order.
  */
-export const inject = ['slots', 'sessions', 'workspaces', 'locale', 'connection']
+export const inject = ['slots', 'sessions', 'workspaces', 'workspaceArchivedView', 'locale', 'connection']
 
 /**
  * Register the browser and picker once their slot declarations are on the
@@ -100,7 +100,7 @@ export function apply(ctx: ClientContext): void {
       await ctx.workspaces.insertBefore(workspaceId, beforeWorkspaceId)
     },
     archiveSession: async (sessionId) => { await ctx.workspaces.archiveSession(sessionId) },
-    setAllowArchivedCurrent: (allow) => { ctx.workspaces.setAllowArchivedCurrent(allow) },
+    setAllowArchivedCurrent: (allow) => { ctx.workspaceArchivedView.setAllowArchivedCurrent(allow) },
     insertSessionBefore: async (workspaceId, sessionId, beforeSessionId) => {
       await ctx.workspaces.insertSessionBefore(workspaceId, sessionId, beforeSessionId)
     },
@@ -130,17 +130,7 @@ export function apply(ctx: ClientContext): void {
       name: 'conversation.composer',
       priority: -20,
       locale: NS,
-      select: (owner: ComposerChainProps) => {
-        try {
-          const id = owner.session?.sessionId
-          if (id === undefined) return null
-          return ctx.workspaces.list.getSnapshot().archivedSessionIds.includes(id) ? true : null
-        } catch {
-          // A failed archive-set read leaves the live composer in place rather
-          // than locking a writable session behind the read-only frame.
-          return null
-        }
-      },
+      select: (owner: ComposerChainProps) => owner.session !== undefined && owner.archived ? true : null,
     },
     ArchivedReadOnlyComposer,
   ))

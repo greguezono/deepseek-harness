@@ -27,6 +27,7 @@ async function bench(getSnapshot: () => WorkspaceListState) {
   ctx.provide('workspaces', {
     list: { getSnapshot, subscribe: () => () => {} },
   } as never)
+  ctx.provide('workspaceArchivedView', { setAllowArchivedCurrent: () => {} })
   ctx.provide('sessions', {} as never)
   ctx.provide('connection', {
     hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} },
@@ -38,9 +39,10 @@ async function bench(getSnapshot: () => WorkspaceListState) {
   return { ctx, entry, select: entry.select as (owner: ComposerChainProps) => true | null }
 }
 
-const owner = (sessionId: SessionId | undefined): ComposerChainProps => ({
+const owner = (sessionId: SessionId | undefined, archived = false): ComposerChainProps => ({
   interactions: [],
   session: sessionId === undefined ? undefined : ({ sessionId } as never),
+  archived,
 })
 
 const listState = (archivedSessionIds: readonly SessionId[]): WorkspaceListState => ({
@@ -49,16 +51,11 @@ const listState = (archivedSessionIds: readonly SessionId[]): WorkspaceListState
 })
 
 describe('archived read-only composer', () => {
-  it('claims the composer only for a session in the archive set', async () => {
-    const b = await bench(() => listState([sid('gone')]))
-    expect(b.select(owner(sid('gone')))).toBe(true)
-    expect(b.select(owner(sid('live')))).toBeNull()
-    expect(b.select(owner(undefined))).toBeNull()
-  })
-
-  it('fails open to the live composer when the archive lookup throws', async () => {
-    const b = await bench(() => { throw new Error('archive snapshot unavailable') })
+  it('claims the composer only for an archived open session', async () => {
+    const b = await bench(() => listState([]))
+    expect(b.select(owner(sid('gone'), true))).toBe(true)
     expect(b.select(owner(sid('gone')))).toBeNull()
+    expect(b.select(owner(undefined, true))).toBeNull()
   })
 
   it('states that an archived session is readable but not sendable', () => {
@@ -79,6 +76,7 @@ describe('archived read-only composer', () => {
     ctx.provide('workspaces', {
       list: { getSnapshot: () => listState([]), subscribe: () => () => {} },
     } as never)
+    ctx.provide('workspaceArchivedView', { setAllowArchivedCurrent: () => {} })
     ctx.provide('sessions', {} as never)
     ctx.provide('connection', {
       hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} },

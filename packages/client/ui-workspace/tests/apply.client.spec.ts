@@ -30,6 +30,7 @@ async function bench() {
   ctx.provide('workspaces', {
     create, startSession, rename, insertSessionBefore,
   } as never)
+  ctx.provide('workspaceArchivedView', { setAllowArchivedCurrent: vi.fn() })
   ctx.provide('sessions', { open, clear, search, searchResultLimit: 20, binding, fork } as never)
   ctx.provide('connection', {
     hostDescription: { getSnapshot: () => undefined, subscribe: () => () => {} },
@@ -56,7 +57,7 @@ function declare(slots: SlotRegistry, ...names: HoleName[]): () => void {
 
 describe('ui-workspace apply', () => {
   it('declares the services it drives', () => {
-    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'locale', 'connection'])
+    expect(inject).toEqual(['slots', 'sessions', 'workspaces', 'workspaceArchivedView', 'locale', 'connection'])
   })
 
   it('registers browser and pickers for declarations arriving before or after apply', async () => {
