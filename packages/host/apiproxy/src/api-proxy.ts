@@ -2360,7 +2360,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       async prompt(request) {
         const { sessionId, mode, content, clientTimeZone } = request.payload
-        if (ctx.workspaceRegistry.archivedSessionIds.includes(sessionId)) {
+        if (ctx.get('workspaceRegistry')?.archivedSessionIds.includes(sessionId) === true) {
           return err(request, {
             code: 'session-archived',
             message: `session "${sessionId}" is archived`,
