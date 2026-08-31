@@ -600,9 +600,23 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
 
   it('shows archived sessions greyed under their group and opens them read-only', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-ws-archived-view'))
-    // Runs after the archive scenario above: the seeded session is already in
-    // the registry-global set, and its row is hidden.
-    expect([...scaffold.ctx.workspaceRegistry.archivedSessionIds]).toEqual([SessionId(SEED_ID)])
+    const archive = await fetch(`${scaffold.baseUrl}/api/workspace.archiveSession`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId: 'workspace-management-arrange-archived-view',
+        method: 'workspace.archiveSession',
+        payload: { sessionId: SEED_ID },
+      }),
+    })
+    expect(archive.ok).toBe(true)
+    expect(await archive.json()).toMatchObject({ result: { ok: true } })
+    await expect.poll(
+      () => [...scaffold.ctx.workspaceRegistry.archivedSessionIds],
+      { timeout: 10_000 },
+    ).toContain(SessionId(SEED_ID))
+    await expect.poll(() => page.getByText('Archived', { exact: true }).count(), { timeout: 10_000 }).toBe(0)
     await page.getByRole('button', { name: 'View options' }).click()
     await page.getByRole('menuitem', { name: 'Show archived' }).click()
     // The Ungrouped bucket returns for its archived-only member; expand it.
@@ -622,14 +636,27 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
       () => page.getByText('Archived', { exact: true }).count(),
       { timeout: 10_000 },
     ).toBe(1)
-    const archivedRow = ungroupedRow.locator('..').locator('[role="treeitem"]').last()
-    const rowTitle = await archivedRow.locator('[class*="title"]').innerText()
+    let archivedRow = ungroupedRow.locator('..').locator('[role="treeitem"]').last()
+    const rowStyle = await archivedRow.locator('[class*="title"]').evaluate(element => getComputedStyle(element))
+    expect(rowStyle.color).not.toBe('')
     // Read-only: the archived row carries no session actions button.
     expect(await archivedRow.locator('button[aria-label^="Session actions for "]').count()).toBe(0)
-    const treeSnapshot = await captureStableAria(page, '[class*="tree"]', scaffold.workspaceCwd)
+    await archivedRow.click()
+    // Opening loads the cold title through the ordinary conversation path, so
+    // the snapshot is identical whether this scenario runs alone or in order.
+    await expect.poll(
+      () => archivedRow.locator('[class*="title"]').innerText(),
+      { timeout: 15_000 },
+    ).toBe('Use the read tool twice')
+    archivedRow = ungroupedRow.locator('..').locator('[role="treeitem"]').last()
+    const rowTitle = await archivedRow.locator('[class*="title"]').innerText()
+    const treeSnapshot = await captureStableAria(
+      page,
+      '[role="treeitem"][aria-selected="true"] [class*="title"]',
+      scaffold.workspaceCwd,
+    )
     await compareOrRefreshGolden(ARCHIVED_EXPECTED, treeSnapshot, MODE)
 
-    await archivedRow.click()
     // Opening an archived session replaces the composer with the read-only frame.
     await expect.poll(
       () => page.getByText('You can read messages, but you cannot send.', { exact: true }).count(),

@@ -1,5 +1,5 @@
 import { Context } from '@deepseek-ai/cordis'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SessionId, WorkspaceId, WorkspaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { SessionRuntime } from '../src/client/sessions/service.ts'
 import { WorkspaceManager } from '../src/client/workspaces/manager.ts'
@@ -8,6 +8,8 @@ import { FakeApiClient, deferred, err, fakeRemote, ok } from './fake-api.client.
 
 const sid = (id: string): SessionId => id as SessionId
 const wid = (id: string): WorkspaceId => id as WorkspaceId
+
+afterEach(() => { vi.unstubAllGlobals() })
 
 function workspace(id: string, sessionIds: SessionId[] = [], createdAt = '2026-01-01T00:00:00.000Z'): WorkspaceView {
   return {
@@ -520,7 +522,43 @@ describe('WorkspaceRuntime', () => {
     expect(workspaces.list.getSnapshot().archivedSessionIds).toEqual([])
   })
 
-  it('skips clearing an archived current only while allowArchivedCurrent is true, and restores the clear when the flag drops', async () => {
+  it('restores a persisted archived current after the browser publishes its initial policy', async () => {
+    const storage = new Map<string, string>([
+      ['dsh.sessions.current', JSON.stringify({ sessionId: 's-open' })],
+    ])
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => { storage.set(key, value) },
+    })
+    const ctx = new Context()
+    const api = new FakeApiClient()
+    const sessions = new SessionRuntime(ctx, api, fakeRemote())
+    const workspaces = new WorkspaceRuntime(ctx, api, sessions)
+    api.onList = () => Promise.resolve(ok({
+      items: [{ sessionId: sid('s-open'), updatedAt: 1, running: false, blank: false }],
+    }) as never)
+    api.onWorkspaceList = () => Promise.resolve(ok({
+      items: [workspace('recent')], archivedSessionIds: [sid('s-open')],
+    }) as never)
+
+    const stopInitialSelection = workspaces.startInitialSelection()
+    await sessions.refresh()
+    await workspaces.refresh()
+    expect(sessions.list.getSnapshot().current).toBeUndefined()
+    expect(storage.get('dsh.sessions.current')).toContain('s-open')
+    expect(api.callsOf('session.create')).toEqual([])
+
+    workspaces.setAllowArchivedCurrent(true)
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+    workspaces.setAllowArchivedCurrent(false)
+    expect(sessions.list.getSnapshot().current).toBeUndefined()
+    expect(storage.get('dsh.sessions.current')).toContain('s-open')
+    workspaces.setAllowArchivedCurrent(true)
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+    stopInitialSelection()
+  })
+
+  it('masks an archived current reversibly while its browser row is unavailable', async () => {
     const ctx = new Context()
     const api = new FakeApiClient()
     const sessions = new SessionRuntime(ctx, api, fakeRemote())
@@ -537,6 +575,13 @@ describe('WorkspaceRuntime', () => {
     await workspaces.archiveSession(sid('s-open'))
     expect(sessions.list.getSnapshot().current).toBe('s-open')
     workspaces.setAllowArchivedCurrent(false)
+    expect(sessions.list.getSnapshot().current).toBeUndefined()
+    workspaces.setAllowArchivedCurrent(true)
+    expect(sessions.list.getSnapshot().current).toBe('s-open')
+    sessions.clear()
+    expect(sessions.list.getSnapshot().current).toBeUndefined()
+    workspaces.setAllowArchivedCurrent(false)
+    workspaces.setAllowArchivedCurrent(true)
     expect(sessions.list.getSnapshot().current).toBeUndefined()
   })
 })

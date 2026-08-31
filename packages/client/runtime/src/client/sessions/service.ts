@@ -256,6 +256,13 @@ export class SessionRuntime implements ISessions {
    */
   private readonly selection: SnapshotStore<SessionSelection>
 
+  /** Sibling-domain exclusions from the current projection; they never change persistence. */
+  private currentExcludedIds: readonly SessionId[] = []
+  /** Selected id before sibling-domain projection exclusions apply. */
+  get selected(): SessionId | undefined {
+    return this.manager.getListSnapshot().current
+  }
+
   private readonly scopes = new Map<SessionId, ScopeRecord>()
   /** The provide channel (roster, materialization rules, current projection) — shared with the test runtime's double. */
   private readonly provideChannel: SessionProvideChannel
@@ -421,6 +428,17 @@ export class SessionRuntime implements ISessions {
    */
   clear(): void {
     this.manager.clearSelection()
+  }
+
+  /**
+   * Exclude selected ids from the current projection without changing persistence.
+   * @param ids - session ids hidden by the sibling domain.
+   */
+  setCurrentExcludedIds(ids: readonly SessionId[]): void {
+    if (ids.length === this.currentExcludedIds.length
+      && ids.every((id, index) => id === this.currentExcludedIds[index])) return
+    this.currentExcludedIds = [...ids]
+    this.projectList()
   }
 
   /**
@@ -658,9 +676,12 @@ export class SessionRuntime implements ISessions {
 
   /** Project the manager's list snapshot into the store (title derivation is display-only). */
   private projectList(): void {
+    const managerSnapshot = this.manager.getListSnapshot()
     const {
-      items, current, phase, subagentsByParent, jobsBySession, currentAddress,
-    } = this.manager.getListSnapshot()
+      items, phase, subagentsByParent, jobsBySession, currentAddress,
+    } = managerSnapshot
+    const selected = managerSnapshot.current
+    const current = selected !== undefined && this.currentExcludedIds.includes(selected) ? undefined : selected
     const ids: SessionId[] = []
     const byId: Record<SessionId, SessionSummary> = {}
     for (const entry of items) {
@@ -715,17 +736,17 @@ export class SessionRuntime implements ISessions {
       }
     }
     const persisted = this.selection.getSnapshot().sessionId
-    // No current (cleared, or masked gap) wipes the persisted cell — a reload
-    // stays on empty; the in-memory selection still resurfaces a masked id.
-    if (current === undefined) {
+    // Only an explicit manager clear wipes persistence. A projection mask keeps
+    // the selected id available for a later reversible reveal.
+    if (selected === undefined) {
       if (persisted !== undefined) this.selection.set({})
-    } else if (byId[current] !== undefined
-      && (persisted !== current
+    } else if (byId[selected] !== undefined
+      && (persisted !== selected
         || this.selection.getSnapshot().subagentAddress?.childSessionId !== currentAddress?.childSessionId
         || this.selection.getSnapshot().subagentAddress?.parentSessionId !== currentAddress?.parentSessionId
         || this.selection.getSnapshot().subagentAddress?.mode !== currentAddress?.mode)) {
       this.selection.set({
-        sessionId: current,
+        sessionId: selected,
         ...(currentAddress === undefined ? {} : { subagentAddress: currentAddress }),
       })
     }

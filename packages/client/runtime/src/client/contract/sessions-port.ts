@@ -31,6 +31,8 @@ export interface SessionsPortList {
 export interface SessionsPort {
   /** Observable list snapshot (read face only; writes stay inside the sessions domain). */
   readonly list: ObservableSnapshot<SessionsPortList>
+  /** Selected id before sibling-domain projection exclusions apply. */
+  readonly selected: SessionId | undefined
   /**
    * Create a session on the host.
    * @param opts - target workspace.
@@ -44,4 +46,9 @@ export interface SessionsPort {
   open(id: SessionId): void
   /** Clear the current selection into the no-session view state. */
   clear(): void
+  /**
+   * Exclude selected ids from the current projection without changing persistence.
+   * @param ids - session ids hidden by the sibling domain.
+   */
+  setCurrentExcludedIds(ids: readonly SessionId[]): void
 }

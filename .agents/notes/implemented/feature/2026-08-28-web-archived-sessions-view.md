@@ -17,8 +17,8 @@ The workspace browser provides a persisted, grouped, read-only archived-session 
 - `showArchived` is a persisted view-store field alongside `groupBy` and `orderBy`; its storage key is `dsh.workspace.view.v6`.
 - In grouped mode, `deriveGroups` populates `GroupNode.archivedSessions` from every group's `memberIds`. The flat list and content search exclude archived rows. A group with only archived members remains visible, including Ungrouped.
 - The archived subsection shows the newest five rows before its independent Show more control. Collapsing a workspace group clears its live and archived expansion keys.
-- Archived rows use the ordinary conversation view but expose no drag control or row actions. The composer chain replaces the input with a read-only message.
-- The browser's `workspaceArchivedView` control preserves an archived current session only while grouped archived rows are visible. Its effect disposer restores the default selection-clear rule.
+- Archived rows use the ordinary conversation view but expose no drag control or row actions. The composer chain replaces the input with a read-only message when no pending interaction needs its controls.
+- The browser's `workspaceArchivedView` control reveals an archived current session only while grouped archived rows are visible. Its effect disposer restores the default reversible projection mask without deleting the persisted selection.
 - An archived-member lookup failure yields no archived rows. `IsolatedBoundary` contains a render failure inside the archived subsection, leaving live workspace rows usable.
 
 ## Alternatives considered
@@ -37,6 +37,6 @@ The workspace browser provides a persisted, grouped, read-only archived-session 
 
 ## Consequences
 
-The archived view is off by default and persists across reloads. It is available only in expanded workspace groups. Opening an archived row retains selection and replaces the composer with a read-only message. The ui-workspace package specs and the keyless workspace-management e2e snapshot cover this behavior.
+The archived view is off by default and persists across reloads. It is available only in expanded workspace groups. Opening an archived row retains selection. The composer shows the read-only message unless a pending interaction needs its controls. The ui-workspace package specs and the keyless workspace-management e2e snapshot cover this behavior.
 
 There is no GUI unarchive action. A user can read an archived Session but cannot restore it from the workspace browser.

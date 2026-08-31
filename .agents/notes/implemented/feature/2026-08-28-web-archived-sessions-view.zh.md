@@ -17,8 +17,8 @@ workspace 浏览器提供持久化、分组、只读的归档会话视图。
 - `showArchived` 是与 `groupBy`、`orderBy` 并列的持久化视图 store 字段；存储 key 为 `dsh.workspace.view.v6`。
 - 在分组模式中，`deriveGroups` 从每个分组的 `memberIds` 填充 `GroupNode.archivedSessions`。平铺列表和内容搜索排除归档行。只有归档成员的分组仍保持可见，包括 Ungrouped。
 - 归档小节先显示最新五行，并使用独立的「展开其余」控件。折叠 workspace 分组会清除实时和归档的展开 key。
-- 归档行使用常规会话视图，但不提供拖拽控件或行操作。编辑器链以只读消息替代输入框。
-- 浏览器的 `workspaceArchivedView` control 只在分组归档行可见时保留已归档的当前会话。其 effect disposer 恢复默认的 selection-clear 规则。
+- 归档行使用常规会话视图，但不提供拖拽控件或行操作。没有待处理 interaction 需要其控件时，编辑器链才以只读消息替代输入框。
+- 浏览器的 `workspaceArchivedView` control 只在分组归档行可见时显示已归档的当前会话。其 effect disposer 恢复默认的可逆投影遮蔽，而不删除持久化 selection。
 - 归档成员查找失败时不会产生归档行。`IsolatedBoundary` 把归档小节内的渲染错误限制在那里，实时 workspace 行仍可用。
 
 ## Alternatives considered
@@ -37,6 +37,6 @@ workspace 浏览器提供持久化、分组、只读的归档会话视图。
 
 ## Consequences
 
-归档视图默认关闭，并在重载后保持。它只在展开的 workspace 分组中可用。打开归档行会保留 selection，并以只读消息替代编辑器。ui-workspace 包内测试和无密钥 workspace-management e2e snapshot 覆盖该行为。
+归档视图默认关闭，并在重载后保持。它只在展开的 workspace 分组中可用。打开归档行会保留 selection。除非待处理 interaction 需要其控件，否则编辑器会显示只读消息。ui-workspace 包内测试和无密钥 workspace-management e2e snapshot 覆盖该行为。
 
 GUI 没有取消归档操作。用户可以读取归档的 Session，但不能从 workspace 浏览器恢复它。

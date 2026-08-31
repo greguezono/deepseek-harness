@@ -1,16 +1,1 @@
-- tree "Sessions":
-  - treeitem "same-name" [expanded]:
-    - img
-    - text: same-name
-  - treeitem "New Session" [selected]
-  - treeitem "beta-ws" [expanded]:
-    - img
-    - text: beta-ws
-  - treeitem "gamma-ws" [expanded]:
-    - img
-    - text: gamma-ws
-  - treeitem "Ungrouped" [expanded]:
-    - img
-    - text: Ungrouped
-  - text: Archived
-  - treeitem "Use the read tool twice"
+- text: Use the read tool twice

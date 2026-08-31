@@ -2360,13 +2360,16 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
 
       async prompt(request) {
         const { sessionId, mode, content, clientTimeZone } = request.payload
-        if (ctx.get('workspaceRegistry')?.archivedSessionIds.includes(sessionId) === true) {
-          return err(request, {
-            code: 'session-archived',
-            message: `session "${sessionId}" is archived`,
-            details: { sessionId },
-          })
-        }
+        const archivedError = (): RpcResponse<{ accepted: true }> | undefined =>
+          ctx.get('workspaceRegistry')?.archivedSessionIds.includes(sessionId) === true
+            ? err(request, {
+              code: 'session-archived',
+              message: `session "${sessionId}" is archived`,
+              details: { sessionId },
+            })
+            : undefined
+        const archived = archivedError()
+        if (archived !== undefined) return archived
         const canonicalTimeZone = clientTimeZone === undefined
           ? undefined
           : canonicalClientTimeZone(clientTimeZone)
@@ -2402,6 +2405,8 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             }
             const durable = await durablePromptContent(ctx, content)
             const message: UserMessage = createUserMessage({ content: durable, source })
+            const archived = archivedError()
+            if (archived !== undefined) return archived
             if (mode === 'steer') agent.steer(message)
             else agent.followup(message)
           } catch (error: unknown) {

@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import AgentRegistry, { Inbox } from '@deepseek-ai/dsh-agent'
 import type { Agent, AgentFactory } from '@deepseek-ai/dsh-agent'
+import AttachmentStore from '@deepseek-ai/dsh-attachment'
 import SessionStore, { SessionId } from '@deepseek-ai/dsh-session'
 import type { Session } from '@deepseek-ai/dsh-session'
 import Storage from '@deepseek-ai/dsh-storage'
@@ -29,6 +30,12 @@ function expectOk<T>(response: RpcResponse<T>): T {
   expect(response.result.ok).toBe(true)
   if (!response.result.ok) throw new Error('unreachable')
   return response.result.value
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((accept) => { resolve = accept })
+  return { promise, resolve }
 }
 
 async function nextHostFrame(
@@ -573,11 +580,53 @@ describe('Host Workspace increments', () => {
     expect(followup).not.toHaveBeenCalled()
     expect(steer).not.toHaveBeenCalled()
 
+    // Admission rechecks after its last await, so an archive committed while
+    // an image is becoming durable still wins before inbox publication.
+    ctx.provide('llm', {
+      listProviders: () => [{ id: 'test' }],
+      resolveModelInfo: () => Promise.resolve({ provider: 'test', id: 'test-model', name: 'Test', inputModalities: ['text', 'image'] }),
+    } as never)
+    let saveStarted = deferred<undefined>()
+    let releaseSave = deferred<undefined>()
+    let attachmentId = 'racing-queue'
+    const attachments = {
+      saveImages: vi.fn(async () => {
+        saveStarted.resolve(undefined)
+        await releaseSave.promise
+        return [{ attachmentId, mediaType: 'image/png', bytes: 1, width: 1, height: 1 }]
+      }),
+    }
+    ctx.provide('attachments', Object.setPrototypeOf(attachments, AttachmentStore.prototype) as never)
+    for (const mode of ['queue', 'steer'] as const) {
+      saveStarted = deferred<undefined>()
+      releaseSave = deferred<undefined>()
+      attachmentId = `racing-${mode}`
+      const racingSessionId = SessionId(`session-archived-during-${mode}`)
+      expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId: racingSessionId })))
+      const racingAgent = ctx.agents.get(racingSessionId)!
+      const racingFollowup = vi.spyOn(racingAgent, 'followup')
+      const racingSteer = vi.spyOn(racingAgent, 'steer')
+      const pending = api.sessions.prompt(request({
+        sessionId: racingSessionId,
+        mode,
+        content: [{ type: 'image', mediaType: 'image/png', data: 'AQ==' }],
+      }))
+      await saveStarted.promise
+      await api.workspace.archiveSession(request({ sessionId: racingSessionId }))
+      releaseSave.resolve(undefined)
+      expect((await pending).result).toMatchObject({
+        ok: false,
+        error: { code: 'session-archived', details: { sessionId: racingSessionId } },
+      })
+      expect(racingFollowup).not.toHaveBeenCalled()
+      expect(racingSteer).not.toHaveBeenCalled()
+    }
+
     // The idempotent repeat emits no second frame: the next observed frame is
     // the workspace-changed of a later attach, not another archive snapshot.
     const after = nextHostFrame(stream)
     expect(expectOk(await api.workspace.archiveSession(request({ sessionId }))).archivedSessionIds)
-      .toEqual([sessionId])
+      .toEqual([sessionId, SessionId('session-archived-during-queue'), SessionId('session-archived-during-steer')])
     const otherSession = SessionId('session-after-archive')
     expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId: otherSession })))
     expect((await after).payload.type).not.toBe('host/archived-sessions-changed')

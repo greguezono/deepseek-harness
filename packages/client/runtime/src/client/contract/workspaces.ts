@@ -86,8 +86,8 @@ export interface IWorkspaces {
   insertSessionBefore(workspaceId: WorkspaceId, sessionId: SessionId, beforeSessionId?: SessionId): Promise<WorkspaceView>
   /**
    * Archive a session into the registry-global set (hidden from grouping
-   * surfaces; session log and accounting slot remain). Archiving the current
-   * session clears the selection into the New Session view state.
+   * surfaces; session log and accounting slot remain). Archiving masks the
+   * current projection unless the grouped archived view is active.
    * @param sessionId - session to archive.
    */
   archiveSession(sessionId: SessionId): Promise<void>

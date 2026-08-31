@@ -47,10 +47,10 @@ export class DirectoryBrowseError extends Error {
   }
 }
 
-/** Browser-local control for preserving an archived current session. */
+/** Browser-local control for revealing an archived current session. */
 export interface ArchivedCurrentControl {
   /**
-   * Set whether the grouped archived view keeps an archived current session selected.
+   * Set whether the grouped archived view reveals an archived current session.
    * @param allow - true while the archived grouped view is active.
    */
   setAllowArchivedCurrent(allow: boolean): void
@@ -145,9 +145,8 @@ export class WorkspaceRuntime implements IWorkspaces {
       if (disposed || state !== 'waiting') return
       const workspace = this.list.getSnapshot()
       if (!workspace.baselinesReady) return
-      const current = this.sessions.list.getSnapshot().current
       const target = workspace.recentWorkspaceId
-      if (current !== undefined || target === undefined) {
+      if (this.sessions.selected !== undefined || target === undefined) {
         state = 'done'
         return
       }
@@ -155,7 +154,7 @@ export class WorkspaceRuntime implements IWorkspaces {
       void this.connectWorkspace(target).then(
         (sessionId) => {
           if (disposed) return
-          if (this.sessions.list.getSnapshot().current === undefined) {
+          if (this.sessions.selected === undefined) {
             this.sessions.open(sessionId)
           }
           state = 'done'
@@ -293,9 +292,8 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
-   * Archive a session into the registry-global set. Clearing an archived
-   * current selection is the projection sweep's job (one rule for the local
-   * echo and a remote tab's frame alike) unless `allowArchivedCurrent` is true.
+   * Archive a session into the registry-global set. The projection sweep masks
+   * an archived current session unless `allowArchivedCurrent` is true.
    * @param sessionId - session to archive.
    */
   async archiveSession(sessionId: SessionId): Promise<void> {
@@ -342,7 +340,7 @@ export class WorkspaceRuntime implements IWorkspaces {
   }
 
   /**
-   * Keep an archived current session selected while the workspace browser shows archived rows.
+   * Reveal an archived current session while the workspace browser shows archived rows.
    * @param allow - true while the archived grouped view is active.
    */
   setAllowArchivedCurrent(allow: boolean): void {
@@ -355,18 +353,12 @@ export class WorkspaceRuntime implements IWorkspaces {
     const workspace = this.manager.getSnapshot()
     const sessions = this.sessions.list.getSnapshot()
     const baselinesReady = workspace.phase === 'ready' && sessions.phase === 'ready'
-    // An archived current selection clears into the New Session view state —
-    // a hidden row must not stay open behind the list. Sweeping here covers
-    // every install path with one rule: the local unary echo, another tab's
-    // changed frame, and a reconnect baseline restoring a persisted
-    // selection that was archived while this client was away.
-    if (
-      !this.allowArchivedCurrent
-      && sessions.current !== undefined
-      && workspace.archivedSessionIds.includes(sessions.current)
-    ) {
-      this.sessions.clear()
-    }
+    // Hide archived selections from the current projection unless their rows
+    // are visible. Persistence retains the selected id so startup and HMR can
+    // reveal it again when the browser restores its archived-view policy.
+    this.sessions.setCurrentExcludedIds(
+      this.allowArchivedCurrent ? [] : workspace.archivedSessionIds,
+    )
     this.list.set({
       items: workspace.items,
       archivedSessionIds: workspace.archivedSessionIds,
