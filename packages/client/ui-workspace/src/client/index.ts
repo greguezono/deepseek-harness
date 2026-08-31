@@ -130,7 +130,11 @@ export function apply(ctx: ClientContext): void {
       name: 'conversation.composer',
       priority: -20,
       locale: NS,
-      select: (owner: ComposerChainProps) => owner.session !== undefined && owner.archived ? true : null,
+      select: (owner: ComposerChainProps) => owner.session !== undefined
+        && owner.archived
+        && owner.interactions.length === 0
+        ? true
+        : null,
     },
     ArchivedReadOnlyComposer,
   ))

@@ -181,14 +181,27 @@ describe('WorkspaceBrowser', () => {
     expect(b.store.getSnapshot().groupBy).toBe('workspace')
   })
 
-  it('defaults Archived off, persists the toggle, and opts runtime in only while grouped', () => {
+  it('opts runtime in only while the grouped archived tree is visible', () => {
     const setAllowArchivedCurrent = vi.fn()
     const b = mount({ setAllowArchivedCurrent })
     expect(b.store.getSnapshot().showArchived).toBe(false)
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '显示已归档' }))
     expect(b.store.getSnapshot().showArchived).toBe(true)
-    expect(setAllowArchivedCurrent).toHaveBeenCalledWith(true)
+    expect(setAllowArchivedCurrent).toHaveBeenLastCalledWith(true)
+
+    rerender(b, { wide: false })
+    expect(setAllowArchivedCurrent).toHaveBeenLastCalledWith(false)
+    rerender(b, { wide: true })
+    expect(setAllowArchivedCurrent).toHaveBeenLastCalledWith(true)
+
+    fireEvent.click(screen.getByRole('button', { name: '搜索会话' }))
+    const searchInput = screen.getByPlaceholderText('搜索会话…')
+    fireEvent.change(searchInput, { target: { value: 'needle' } })
+    expect(setAllowArchivedCurrent).toHaveBeenLastCalledWith(false)
+    fireEvent.change(searchInput, { target: { value: '' } })
+    expect(setAllowArchivedCurrent).toHaveBeenLastCalledWith(true)
+
     fireEvent.click(screen.getByRole('button', { name: '视图选项' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '单列表' }))
     expect(setAllowArchivedCurrent).toHaveBeenLastCalledWith(false)

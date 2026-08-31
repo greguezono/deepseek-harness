@@ -530,7 +530,7 @@ describe('Host Workspace increments', () => {
   })
 
   it('archives a session into the global set, keeps its accounting, and streams the set once', async () => {
-    const { api, root } = await harness()
+    const { api, ctx, root } = await harness()
     const workspace = expectOk(await api.workspace.create(request({ path: stageDir(root, 'archive-home') }))).workspace
     const sessionId = SessionId('session-to-archive')
     expectOk(await api.sessions.create(request({ workspaceId: workspace.workspaceId, sessionId })))
@@ -551,6 +551,27 @@ describe('Host Workspace increments', () => {
     expect(listed.archivedSessionIds).toEqual([sessionId])
     expect(listed.items[0]?.sessionIds).toEqual([sessionId])
     expect(expectOk(await api.sessions.list(request({}))).items.map(item => item.sessionId)).toContain(sessionId)
+
+    const agent = ctx.agents.get(sessionId)!
+    const followup = vi.spyOn(agent, 'followup')
+    const steer = vi.spyOn(agent, 'steer')
+    for (const mode of ['queue', 'steer'] as const) {
+      const refused = await api.sessions.prompt(request({
+        sessionId,
+        mode,
+        content: [{ type: 'text' as const, text: 'must stay archived' }],
+      }))
+      expect(refused.result).toEqual({
+        ok: false,
+        error: {
+          code: 'session-archived',
+          message: `session "${sessionId}" is archived`,
+          details: { sessionId },
+        },
+      })
+    }
+    expect(followup).not.toHaveBeenCalled()
+    expect(steer).not.toHaveBeenCalled()
 
     // The idempotent repeat emits no second frame: the next observed frame is
     // the workspace-changed of a later attach, not another archive snapshot.

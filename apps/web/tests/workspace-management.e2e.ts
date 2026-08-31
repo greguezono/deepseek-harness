@@ -636,6 +636,28 @@ describe('web e2e: workspace management (create / rename / flat view / hover aff
       { timeout: 15_000 },
     ).toBe(1)
     expect(await page.getByText(rowTitle, { exact: true }).count()).toBeGreaterThan(0)
+
+    const prompt = await fetch(`${scaffold.baseUrl}/api/session.prompt`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request',
+        rpcId: 'workspace-management-archived-prompt',
+        method: 'session.prompt',
+        payload: {
+          sessionId: SEED_ID,
+          mode: 'queue',
+          content: [{ type: 'text', text: 'must stay archived' }],
+        },
+      }),
+    })
+    expect(prompt.ok).toBe(true)
+    expect(await prompt.json()).toMatchObject({
+      result: {
+        ok: false,
+        error: { code: 'session-archived', details: { sessionId: SEED_ID } },
+      },
+    })
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 

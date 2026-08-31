@@ -836,12 +836,6 @@ export function WorkspaceBrowser({
   const groupExpansion = useStore(s => s.groupExpansion)
   const sessionOrderByAccount = useStore(s => s.sessionOrderByAccount)
   const sessionUpdatedAtByAccount = useStore(s => s.sessionUpdatedAtByAccount)
-  // Only the grouped view renders archived rows, so only it keeps an archived
-  // current session selected. The disposer restores the runtime default.
-  useEffect(() => {
-    setAllowArchivedCurrent(groupBy === 'workspace' && showArchived)
-    return () => { setAllowArchivedCurrent(false) }
-  }, [groupBy, showArchived, setAllowArchivedCurrent])
   const currentBlankSessionId = useSessions((state) => {
     const current = state.current
     return current !== undefined && state.byId[current]?.blank === true ? current : undefined
@@ -880,6 +874,13 @@ export function WorkspaceBrowser({
   const [query, setQuery] = useState('')
   const [searchExpanded, setSearchExpanded] = useState(false)
   const normalizedQuery = sanitizeSearchQuery(query).trim()
+  // Preserve an archived selection only while its navigation row can render.
+  useEffect(() => {
+    setAllowArchivedCurrent(
+      wide && normalizedQuery === '' && groupBy === 'workspace' && showArchived,
+    )
+    return () => { setAllowArchivedCurrent(false) }
+  }, [groupBy, normalizedQuery, setAllowArchivedCurrent, showArchived, wide])
   const [remoteSearch, setRemoteSearch] = useState<RemoteSearchState>({
     query: '',
     status: 'idle',

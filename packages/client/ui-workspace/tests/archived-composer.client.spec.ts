@@ -39,8 +39,12 @@ async function bench(getSnapshot: () => WorkspaceListState) {
   return { ctx, entry, select: entry.select as (owner: ComposerChainProps) => true | null }
 }
 
-const owner = (sessionId: SessionId | undefined, archived = false): ComposerChainProps => ({
-  interactions: [],
+const owner = (
+  sessionId: SessionId | undefined,
+  archived = false,
+  interactions: ComposerChainProps['interactions'] = [],
+): ComposerChainProps => ({
+  interactions,
   session: sessionId === undefined ? undefined : ({ sessionId } as never),
   archived,
 })
@@ -56,6 +60,12 @@ describe('archived read-only composer', () => {
     expect(b.select(owner(sid('gone'), true))).toBe(true)
     expect(b.select(owner(sid('gone')))).toBeNull()
     expect(b.select(owner(undefined, true))).toBeNull()
+  })
+
+  it('declines while an archived session has an answerable interaction', async () => {
+    const b = await bench(() => listState([]))
+    const interaction = { kind: 'approval' } as ComposerChainProps['interactions'][number]
+    expect(b.select(owner(sid('gone'), true, [interaction]))).toBeNull()
   })
 
   it('states that an archived session is readable but not sendable', () => {
