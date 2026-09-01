@@ -237,12 +237,13 @@ export interface DelegatedPolicyOverrides {
  * grants — and the approval policy is pinned to `'never'` regardless of the
  * parent's own policy.
  * @param parent - the delegating parent agent.
+ * @param ctx - runtime context that owns the optional policy services.
  * @returns the sandbox override (or `undefined` without one) and the approval pin.
  */
-export function captureDelegatedPolicyOverrides(parent: Agent): DelegatedPolicyOverrides {
+export function captureDelegatedPolicyOverrides(parent: Agent, ctx: Context = parent.ctx): DelegatedPolicyOverrides {
   return {
-    sandboxMode: parent.ctx.get('sandboxPolicy')?.overrideOf(parent.session),
-    approvalPolicy: parent.ctx.get('approval') === undefined ? undefined : 'never',
+    sandboxMode: ctx.get('sandboxPolicy')?.overrideOf(parent.session),
+    approvalPolicy: ctx.get('approval') === undefined ? undefined : 'never',
   }
 }
 

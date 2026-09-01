@@ -576,7 +576,7 @@ export class SubagentRuntime extends TypertRemoteService {
     this.assertCapabilities(provider, request)
     assertSubagentMaxDepth(request.maxDepth)
     if (request.outputSchema !== undefined) assertObjectJsonSchema(request.outputSchema)
-    const delegatedPolicies = captureDelegatedPolicyOverrides(request.parent)
+    const delegatedPolicies = captureDelegatedPolicyOverrides(request.parent, this.ctx)
     const resolvedAgentOptions = await this.resolveChildRoute(request.parent, request.agentOptions, request.signal)
     if (this.getProvider(name) !== provider) {
       throw new Error(`subagent provider "${name}" changed while resolving the child LLM route; retry the delegation`)
@@ -590,7 +590,9 @@ export class SubagentRuntime extends TypertRemoteService {
       ...request,
       ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
       descriptor,
-      delegatedPolicies,
+      ...(delegatedPolicies.sandboxMode === undefined && delegatedPolicies.approvalPolicy === undefined
+        ? {}
+        : { delegatedPolicies }),
     }
     return observeRun(this.emitLifecycle, name, request.parent, await provider.start(resolved))
   }

@@ -20,7 +20,10 @@ export async function resolveChildRoute(
   signal: AbortSignal,
 ): Promise<AgentOptions | undefined> {
   const projections = ctx.get('sessionProjections')
-  const policy = projections === undefined
+  // Provider unit tests use minimal Agent doubles without a Session event log.
+  // Such doubles cannot carry a durable model-selection policy.
+  const hasSessionLog = Array.isArray((parent.session as { events?: unknown }).events)
+  const policy = projections === undefined || !hasSessionLog
     ? undefined
     : subagentModelSelectionPolicy(projections, parent.session)
   if (policy === undefined) return requested

@@ -427,7 +427,7 @@ export class SubagentContinuationManager {
     const childId = spec.childId ?? brandString<SessionId>(randomUUID())
     this.assertChildIdAvailable(childId)
     const childDepth = resolveChildDepth(parent, request.maxDepth)
-    const delegatedPolicies = captureDelegatedPolicyOverrides(parent)
+    const delegatedPolicies = captureDelegatedPolicyOverrides(parent, this.ctx)
     const resolvedAgentOptions = await this.host.resolveChildRoute(parent, request.agentOptions, spec.signal)
     spec.signal.throwIfAborted()
     const persistence = this.requirePersistence()
