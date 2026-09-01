@@ -101,6 +101,7 @@ describe('web e2e: plugin configuration section', () => {
     await models.waitFor({ timeout: 10_000 })
     const firstModel = models.getByRole('checkbox').first()
     await firstModel.check()
+    await dialog.getByRole('group', { name: '默认模型' }).getByRole('radio').first().check()
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
 
     const expandSubagent = dialog.getByRole('button', { name: '展开设置: Subagent' })
@@ -108,6 +109,7 @@ describe('web e2e: plugin configuration section', () => {
     await expect.poll(async () => (await settingsDocument()).includes('subagent-model-selection:'), { timeout: 10_000 })
       .toBe(true)
     expect(await settingsDocument()).toContain('enabled: true')
+    expect(await settingsDocument()).toContain('defaultModel:')
     expect(await settingsDocument()).toContain('allowedModels:')
     expect(await settingsDocument()).toContain('provider:')
     expect(await settingsDocument()).toContain('model:')
