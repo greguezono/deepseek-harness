@@ -181,6 +181,18 @@ interface ContinuationHost {
    */
   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
   /**
+   * Resolve and authorize one child route before provider preparation.
+   * @param parent - delegating parent whose Session carries the policy.
+   * @param requested - per-child Agent options.
+   * @param signal - caller cancellation for adapter preflight.
+   * @returns requested options when disabled, otherwise the resolved authorized route.
+   */
+  resolveChildRoute(
+    parent: Agent,
+    requested: AgentOptions | undefined,
+    signal: AbortSignal,
+  ): Promise<AgentOptions | undefined>
+  /**
    * Build the lifecycle observer for one Activation's residency epoch.
    * @param provider - the provider name recorded in the durable descriptor.
    * @param childId - the durable child session id.
@@ -416,9 +428,11 @@ export class SubagentContinuationManager {
     const childId = spec.childId ?? brandString<SessionId>(randomUUID())
     this.assertChildIdAvailable(childId)
     const childDepth = resolveChildDepth(parent, request.maxDepth)
-    // Snapshot before any await: invalid descriptor JSON rejects the call
-    // before a child exists, and the detached value is what reaches the log.
-    const agentOptions = resolveChildAgentOptions(parent, request.agentOptions, childDepth)
+    const resolvedAgentOptions = await this.host.resolveChildRoute(parent, request.agentOptions, spec.signal)
+    spec.signal.throwIfAborted()
+    // Snapshot before provider preparation: invalid descriptor JSON rejects the
+    // call before a child exists, and the detached value is what reaches the log.
+    const agentOptions = resolveChildAgentOptions(parent, resolvedAgentOptions, childDepth)
     const agentProvider = agentOptions.provider
     const agentModel = agentOptions.model
     const agentReasoningEffort = agentOptions.reasoningEffort
