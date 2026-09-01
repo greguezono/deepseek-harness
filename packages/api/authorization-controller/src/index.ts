@@ -71,7 +71,10 @@ export class AuthorizationController extends TypertRemoteService {
     super(ctx, 'authorizationController', { namespace: 'authorization' })
   }
 
-  /** @returns every registered flow as a wire view, in registration order. */
+  /**
+   * List every registered authorization flow as a wire view, in registration order.
+   * @returns the wire views of all registered flows.
+   */
   @Remote('list')
   list(): readonly AuthorizationEntryView[] {
     return this.ctx.authorization.list().map(entry => ({

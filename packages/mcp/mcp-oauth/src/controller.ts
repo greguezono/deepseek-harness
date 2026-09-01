@@ -31,7 +31,10 @@ export class McpOAuthController extends TypertRemoteService {
     super(ctx, 'mcpOAuthController', { namespace: 'mcpOAuth' })
   }
 
-  /** @returns every live binding's safe entry. */
+  /**
+   * List every live binding's safe entry.
+   * @returns the safe entries of all live bindings.
+   */
   @Remote('list')
   list(): readonly McpOAuthEntry[] {
     return this.ctx.mcpOAuth.list()

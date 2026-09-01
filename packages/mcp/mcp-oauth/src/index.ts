@@ -110,7 +110,10 @@ export abstract class McpOAuthService extends Service {
    */
   abstract register(registration: McpOAuthRegistration): McpOAuthBinding & { dispose(): void }
 
-  /** @returns every live binding's safe entry, in registration order. */
+  /**
+   * List every live binding's safe entry, in registration order.
+   * @returns the safe entries of all live bindings.
+   */
   abstract list(): readonly McpOAuthEntry[]
 
   /**
