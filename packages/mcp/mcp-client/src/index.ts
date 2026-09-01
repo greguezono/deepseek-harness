@@ -173,11 +173,31 @@ function validateOAuthConfig(value: Config): Config {
   return value
 }
 
+const configStandard = configSchema['~standard'] as { vendor: string; version: number; validate: (input: unknown) => unknown }
+
 export const Config: z<ConfigInput, Config> = Object.assign(
   function config(input: ConfigInput): Config {
     return validateOAuthConfig(configSchema(input) as Config)
   } as z<ConfigInput, Config>,
   configSchema,
+  {
+    // The Loader validates config through the Standard Schema interface
+    // (`runtime.Config['~standard'].validate`). `~standard` lives on the
+    // schemastery prototype, so the `Object.assign` above drops it; re-attach
+    // it with a `validate` that runs the same parse + OAuth post-check as the
+    // wrapper, so a cordis.yml entry fails loud on the same misconfigurations.
+    '~standard': {
+      vendor: configStandard.vendor,
+      version: configStandard.version,
+      validate: (input: unknown): { value: Config } | { issues: { message: string }[] } => {
+        try {
+          return { value: validateOAuthConfig(configSchema(input as ConfigInput) as Config) }
+        } catch (error) {
+          return { issues: [{ message: error instanceof Error ? error.message : String(error) }] }
+        }
+      },
+    },
+  },
 )
 
 // ---- Plugin apply ----
