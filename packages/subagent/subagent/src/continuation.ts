@@ -427,6 +427,7 @@ export class SubagentContinuationManager {
     const childId = spec.childId ?? brandString<SessionId>(randomUUID())
     this.assertChildIdAvailable(childId)
     const childDepth = resolveChildDepth(parent, request.maxDepth)
+    const delegatedPolicies = captureDelegatedPolicyOverrides(parent)
     const resolvedAgentOptions = await this.host.resolveChildRoute(parent, request.agentOptions, spec.signal)
     spec.signal.throwIfAborted()
     const persistence = this.requirePersistence()
@@ -446,10 +447,6 @@ export class SubagentContinuationManager {
       ...request.persona !== undefined ? { persona: request.persona } : {},
       ...request.toolFilter !== undefined ? { toolFilter: request.toolFilter } : {},
     })
-    // Capture before the first await: a later parent switch belongs to the
-    // parent's future, not to this child.
-    const delegatedPolicies = captureDelegatedPolicyOverrides(parent)
-
     const prepared = await this.host.prepareContinuable(spec.provider, {
       sessionId: childId,
       parent,

@@ -62,6 +62,7 @@ import type {
 } from './types.ts'
 import { SubagentError } from './error.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
+import { captureDelegatedPolicyOverrides } from './child-agent.ts'
 import { createActivationObserver, createLifecycleEmitter, observeRun } from './lifecycle.ts'
 import type { ActivationObserver, LifecycleEmitter } from './lifecycle.ts'
 import SubagentContinuationManager from './continuation.ts'
@@ -575,6 +576,7 @@ export class SubagentRuntime extends TypertRemoteService {
     this.assertCapabilities(provider, request)
     assertSubagentMaxDepth(request.maxDepth)
     if (request.outputSchema !== undefined) assertObjectJsonSchema(request.outputSchema)
+    const delegatedPolicies = captureDelegatedPolicyOverrides(request.parent)
     const resolvedAgentOptions = await this.resolveChildRoute(request.parent, request.agentOptions, request.signal)
     if (this.getProvider(name) !== provider) {
       throw new Error(`subagent provider "${name}" changed while resolving the child LLM route; retry the delegation`)
@@ -588,6 +590,7 @@ export class SubagentRuntime extends TypertRemoteService {
       ...request,
       ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
       descriptor,
+      delegatedPolicies,
     }
     return observeRun(this.emitLifecycle, name, request.parent, await provider.start(resolved))
   }

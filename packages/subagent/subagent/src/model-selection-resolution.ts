@@ -32,12 +32,9 @@ export async function resolveChildRoute(
   }
 
   const parentOptions = parentAgentOptionsForDelegation(parent)
-  const provider = requested?.provider ?? policy?.defaultModel.provider ?? parentOptions.provider
-  const model = requested?.model ?? policy?.defaultModel.model ?? parentOptions.model
-  if (provider === undefined || model === undefined) {
-    throw new Error('cannot select child LLM values without an effective provider and model')
-  }
-  if (policy !== undefined && !policy.routes.some(route => route.provider === provider && route.model === model)) {
+  const provider = requested?.provider ?? policy.defaultModel.provider
+  const model = requested?.model ?? policy.defaultModel.model
+  if (!policy.routes.some(route => route.provider === provider && route.model === model)) {
     throw new Error(`child LLM route "${provider}/${model}" is not allowed for this Session`)
   }
 

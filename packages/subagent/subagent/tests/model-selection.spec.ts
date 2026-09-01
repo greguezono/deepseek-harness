@@ -18,19 +18,19 @@ const POLICY = { defaultModel: DEFAULT, routes: [DEFAULT, OTHER] }
 
 describe('assertModelSelectionPolicy', () => {
   it('rejects an enabled policy without a default', () => {
-    expect(() => assertModelSelectionPolicy({ defaultModel: undefined, allowedModels: [DEFAULT] }))
+    expect(() => { assertModelSelectionPolicy({ defaultModel: undefined, allowedModels: [DEFAULT] }) })
       .toThrow('requires a default model')
   })
   it('rejects a default absent from the allowlist', () => {
-    expect(() => assertModelSelectionPolicy({ defaultModel: DEFAULT, allowedModels: [OTHER] }))
+    expect(() => { assertModelSelectionPolicy({ defaultModel: DEFAULT, allowedModels: [OTHER] }) })
       .toThrow('default must appear in the allowed list')
   })
   it('rejects an empty allowlist', () => {
-    expect(() => assertModelSelectionPolicy({ defaultModel: DEFAULT, allowedModels: [] }))
+    expect(() => { assertModelSelectionPolicy({ defaultModel: DEFAULT, allowedModels: [] }) })
       .toThrow('at least one allowed model')
   })
   it('accepts a valid policy', () => {
-    expect(() => assertModelSelectionPolicy({ defaultModel: DEFAULT, allowedModels: [DEFAULT, OTHER] }))
+    expect(() => { assertModelSelectionPolicy({ defaultModel: DEFAULT, allowedModels: [DEFAULT, OTHER] }) })
       .not.toThrow()
   })
 })
