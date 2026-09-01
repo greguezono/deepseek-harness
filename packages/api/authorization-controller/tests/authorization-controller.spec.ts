@@ -118,7 +118,7 @@ describe('AuthorizationController', () => {
     for await (const frame of controller.begin({ key: String(KEY) }, signal)) {
       frames.push(frame)
       if (frame.kind === 'prompt') {
-        await controller.respond({ key: String(KEY), promptId: frame.promptId, answer: 'the-code' })
+        controller.respond({ key: String(KEY), promptId: frame.promptId, answer: 'the-code' })
       }
     }
     expect(frames[0]).toEqual({ kind: 'notice', message: 'Open this page', url: 'http://127.0.0.1:1/x' })
@@ -135,7 +135,7 @@ describe('AuthorizationController', () => {
     for await (const frame of controller.begin({ key: String(KEY) }, new AbortController().signal)) {
       frames.push(frame)
       if (frame.kind === 'prompt') {
-        await controller.respond({ key: String(KEY), promptId: frame.promptId, declined: true })
+        controller.respond({ key: String(KEY), promptId: frame.promptId, declined: true })
       }
     }
     expect(frames.at(-1)).toEqual({ kind: 'outcome', status: 'cancelled' })
@@ -144,7 +144,7 @@ describe('AuthorizationController', () => {
   it('a dropped carrier signal withdraws the attempt', async () => {
     const { ctx, controller } = await mount(async (session) => {
       await new Promise((_resolve, reject) => {
-        session.signal.addEventListener('abort', () => { reject(session.signal.reason ?? new Error('withdrawn')) }, { once: true })
+        session.signal.addEventListener('abort', () => { reject(session.signal.reason instanceof Error ? session.signal.reason : new Error('withdrawn')) }, { once: true })
       })
     })
     dispose = () => ctx.fiber.dispose()

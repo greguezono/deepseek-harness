@@ -9,7 +9,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import type { AuthorizationSession } from '@deepseek-ai/dsh-authorization'
-import type { CredentialKey, CredentialProvider, CredentialRecord } from '@deepseek-ai/dsh-credentials'
+import type { CredentialKey, CredentialProvider } from '@deepseek-ai/dsh-credentials'
 import type { WebServer } from '@deepseek-ai/dsh-host-webserver'
 import type {
   McpOAuthBinding, McpOAuthCredentialId, McpOAuthEntry, McpOAuthStatus,
@@ -97,11 +97,12 @@ class BindingClientProvider implements OAuthClientProvider {
   }
 
   async saveCodeVerifier(codeVerifier: string): Promise<void> {
-    await this.binding.saveCodeVerifier(codeVerifier)
+    this.binding.saveCodeVerifier(codeVerifier)
+    await Promise.resolve()
   }
 
   async codeVerifier(): Promise<string> {
-    return this.binding.codeVerifier()
+    return Promise.resolve(this.binding.codeVerifier())
   }
 
   async invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery'): Promise<void> {
@@ -279,10 +280,10 @@ export class Binding implements McpOAuthBinding {
   }
 
   /**
-   * Persist the PKCE verifier before the URL is published.
+   * Store the PKCE verifier before the URL is published.
    * @param codeVerifier - the PKCE code verifier string.
    */
-  async saveCodeVerifier(codeVerifier: string): Promise<void> {
+  saveCodeVerifier(codeVerifier: string): void {
     if (this.attempt === undefined) throw new Error('no authorization attempt is running')
     this.attempt.codeVerifier = codeVerifier
   }
@@ -291,7 +292,7 @@ export class Binding implements McpOAuthBinding {
    * Return the PKCE verifier for the running attempt.
    * @returns the PKCE code verifier string.
    */
-  async codeVerifier(): Promise<string> {
+  codeVerifier(): string {
     if (this.attempt === undefined) throw new Error('no authorization attempt is running')
     return this.attempt.codeVerifier
   }
@@ -358,13 +359,13 @@ export class Binding implements McpOAuthBinding {
 
   /** Serialized read-modify-write over the grant record. */
   private async modifyGrant(update: (payload: GrantPayload | undefined) => GrantPayload | undefined): Promise<void> {
-    await this.credentials.modifyRecord(this.key, async (current: CredentialRecord | undefined) => {
+    await this.credentials.modifyRecord(this.key, (current) => {
       const existing = current !== undefined && current.kind === 'grant'
         ? parseGrantPayload(current.payload, this.facts)
         : undefined
       const next = update(existing)
-      if (next === undefined) return current
-      return { kind: 'grant' as const, payload: serializeGrantPayload(next) }
+      if (next === undefined) return Promise.resolve(current)
+      return Promise.resolve({ kind: 'grant' as const, payload: serializeGrantPayload(next) })
     })
   }
 

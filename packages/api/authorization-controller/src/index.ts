@@ -103,7 +103,7 @@ export class AuthorizationController extends TypertRemoteService {
     const pending = new Map<string, PendingPrompt>()
     this.prompts.set(key, pending)
     const interaction: AuthorizationInteraction = {
-      notify: notice => push({ kind: 'notice', ...notice }),
+      notify: (notice) => { push({ kind: 'notice', ...notice }) },
       prompt: prompt => new Promise<string>((resolve, reject) => {
         const promptId = `p${String(++this.promptSeq)}`
         pending.set(promptId, {
@@ -113,7 +113,7 @@ export class AuthorizationController extends TypertRemoteService {
         prompt.signal?.addEventListener('abort', () => {
           if (pending.delete(promptId)) {
             push({ kind: 'prompt-withdrawn', promptId })
-            reject(prompt.signal?.reason ?? new Error('the prompt was withdrawn by its flow'))
+            reject(prompt.signal?.reason instanceof Error ? prompt.signal.reason : new Error('the prompt was withdrawn by its flow'))
           }
         }, { once: true })
         push({ kind: 'prompt', promptId, prompt: promptView(prompt) })
@@ -122,8 +122,8 @@ export class AuthorizationController extends TypertRemoteService {
     let finished = false
     void this.ctx.authorization
       .begin({ key, ...request.method === undefined ? {} : { method: request.method }, interaction, signal })
-      .then(outcome => push({ kind: 'outcome', status: outcome.status }))
-      .catch((error: unknown) => push({ kind: 'outcome', status: 'failed', message: safeMessage(error) }))
+      .then((outcome) => { push({ kind: 'outcome', status: outcome.status }) })
+      .catch((error: unknown) => { push({ kind: 'outcome', status: 'failed', message: safeMessage(error) }) })
     try {
       while (!finished) {
         if (queue.length === 0) {

@@ -177,7 +177,7 @@ const configStandard = configSchema['~standard'] as { vendor: string; version: n
 
 export const Config: z<ConfigInput, Config> = Object.assign(
   function config(input: ConfigInput): Config {
-    return validateOAuthConfig(configSchema(input) as Config)
+    return validateOAuthConfig(configSchema(input))
   } as z<ConfigInput, Config>,
   configSchema,
   {
@@ -189,7 +189,7 @@ export const Config: z<ConfigInput, Config> = Object.assign(
       version: configStandard.version,
       validate: (input: unknown): { value: Config } | { issues: { message: string }[] } => {
         try {
-          return { value: validateOAuthConfig(configSchema(input as ConfigInput) as Config) }
+          return { value: validateOAuthConfig(configSchema(input as ConfigInput)) }
         } catch (error) {
           return { issues: [{ message: error instanceof Error ? error.message : String(error) }] }
         }
@@ -271,7 +271,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
       label: oauth.label === '' ? config.serverName : oauth.label,
     })
     binding = registered
-    ctx.effect(() => () => registered.dispose(), 'mcp-client.oauth-binding')
+    ctx.effect(() => () => { registered.dispose() }, 'mcp-client.oauth-binding')
   }
 
   // The supervisor owns the client/transport generations, the reconnect

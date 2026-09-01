@@ -22,10 +22,6 @@ function errList(code: string, message: string): ListResult<never> {
   return { ok: false, error: { code, message } }
 }
 
-type VoidResult =
-  | { readonly ok: true; readonly value: undefined }
-  | { readonly ok: false; readonly error: RemoteError }
-
 async function bench() {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
@@ -36,7 +32,10 @@ async function bench() {
       { key: 'mcp-oauth/datadog', label: 'Datadog', methods: [{ id: 'oauth', label: 'Sign in' }], inFlight: false },
     ])),
     begin: vi.fn(),
-    respond: vi.fn(async () => ({ ok: true, value: undefined }) as VoidResult),
+    respond: vi.fn(async (): Promise<
+      | { ok: true; value: undefined }
+      | { ok: false; error: RemoteError }
+    > => ({ ok: true, value: undefined })),
     cancel: vi.fn(async () => ({ ok: true, value: undefined })),
   }
   const mcpOAuth = {
@@ -76,16 +75,13 @@ describe('ui-settings-authorization browser plugin', () => {
 
     const injected = (entry.inject as unknown as () => AuthorizationSettingsTabInjected)()
     // The joined list unwraps both Remote result envelopes and joins by key.
-    await expect(injected.list()).resolves.toEqual([
-      expect.objectContaining({
-        key: 'mcp-oauth/datadog',
-        label: 'Datadog',
-        oauth: expect.objectContaining({
-          credentialId: 'datadog',
-          serverUrl: 'https://mcp.datadoghq.com/mcp',
-        }),
-      }),
-    ])
+    const items = await injected.list()
+    expect(items).toHaveLength(1)
+    const item = items[0]!
+    expect(item.key).toBe('mcp-oauth/datadog')
+    expect(item.label).toBe('Datadog')
+    expect(item.oauth?.credentialId).toBe('datadog')
+    expect(item.oauth?.serverUrl).toBe('https://mcp.datadoghq.com/mcp')
     expect(b.authorization.list).toHaveBeenCalledOnce()
     expect(b.mcpOAuth.list).toHaveBeenCalledOnce()
 

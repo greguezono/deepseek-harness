@@ -71,7 +71,7 @@ export function parseGrantPayload(raw: unknown, facts: GrantBindingFacts): Grant
   }
   return {
     serverUrl,
-    scopes: scopes as string[],
+    scopes: scopes,
     ...clientInformation === undefined ? {} : { clientInformation: clientInformation as OAuthClientInformationMixed },
     ...tokens === undefined ? {} : { tokens: tokens as OAuthTokens },
   }

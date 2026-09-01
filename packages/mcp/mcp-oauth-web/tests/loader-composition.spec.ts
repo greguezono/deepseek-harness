@@ -244,7 +244,7 @@ describe('real Loader composition — OAuth round trip through the Web stack', (
     const docPath = join(home, '.credentials.yaml')
     const doc = await readFile(docPath, 'utf8')
     expect(doc).toContain(String(OAUTH_KEY))
-    for (const token of oauthFixture!.tokens) {
+    for (const token of oauthFixture.tokens) {
       for (const line of logs) {
         expect(line).not.toContain(token)
       }

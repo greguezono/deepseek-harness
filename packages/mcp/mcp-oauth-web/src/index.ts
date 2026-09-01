@@ -35,8 +35,9 @@ export class McpOAuthWebService extends McpOAuthService {
     this.ctx.effect(() => this.ctx.webServer.register({
       kind: 'exact',
       path: '/oauth/mcp/callback',
-      handler: (req, res) => this.callbacks.handler(req, res),
+      handler: (req, res) => { this.callbacks.handler(req, res) },
     }), 'mcp-oauth-web: callback route')
+    await Promise.resolve()
   }
 
   /**

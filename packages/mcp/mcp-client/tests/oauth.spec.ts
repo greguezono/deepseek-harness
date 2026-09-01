@@ -70,13 +70,13 @@ function fakeMcpOAuth(initial: McpOAuthStatus, fixtureUrl: string): {
       listeners.add(listener)
       return () => { listeners.delete(listener) }
     },
-    noteUnauthorized: () => setStatus({ state: 'sign-in-required' }),
+    noteUnauthorized: () => { setStatus({ state: 'sign-in-required' }) },
     async invalidate() { setStatus({ state: 'sign-in-required' }) },
     dispose: () => { listeners.clear() },
   }
   const service = {
     register: () => binding,
-    list: () => [],
+    list: () => [] as never[],
     signOut: async () => {},
   }
   return { service, binding, flip: setStatus }
@@ -134,8 +134,8 @@ describe('mcp-client oauth path', () => {
   })
 
   it('sign-in-required is a wait state: no tools, no reconnect burn, startup succeeds even with failOnStartupError', async () => {
-    const { service } = fakeMcpOAuth({ state: 'sign-in-required' }, fixture.url)
-    ctx.provide('mcpOAuth', service as never)
+    const fake = fakeMcpOAuth({ state: 'sign-in-required' }, fixture.url)
+    ctx.provide('mcpOAuth', fake.service)
     const { warns } = captureLogs(ctx)
 
     await apply(ctx, oauthHttpConfig(fixture.url, true))
@@ -146,13 +146,13 @@ describe('mcp-client oauth path', () => {
   })
 
   it('authorization completion starts a fresh generation and publishes tools', async () => {
-    const { service, flip } = fakeMcpOAuth({ state: 'sign-in-required' }, fixture.url)
-    ctx.provide('mcpOAuth', service as never)
+    const fake = fakeMcpOAuth({ state: 'sign-in-required' }, fixture.url)
+    ctx.provide('mcpOAuth', fake.service)
 
     await apply(ctx, oauthHttpConfig(fixture.url))
     expect(ctx.tools.get('mcp__dd__ping')).toBeUndefined()
 
-    flip({ state: 'authorized' })
+    fake.flip({ state: 'authorized' })
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__dd__ping')).toBeDefined() })
 
     const result = await ctx.tools.execute({
@@ -163,14 +163,14 @@ describe('mcp-client oauth path', () => {
   })
 
   it('unauthorized during operation returns to wait state and removes tools', async () => {
-    const { service, flip } = fakeMcpOAuth({ state: 'authorized' }, fixture.url)
-    ctx.provide('mcpOAuth', service as never)
+    const fake = fakeMcpOAuth({ state: 'authorized' }, fixture.url)
+    ctx.provide('mcpOAuth', fake.service)
     const { warns } = captureLogs(ctx)
 
     await apply(ctx, oauthHttpConfig(fixture.url))
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__dd__ping')).toBeDefined() })
 
-    flip({ state: 'sign-in-required' })
+    fake.flip({ state: 'sign-in-required' })
     await vi.waitFor(() => { expect(ctx.tools.get('mcp__dd__ping')).toBeUndefined() })
 
     await sleep(50)
