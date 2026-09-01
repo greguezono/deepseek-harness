@@ -22,12 +22,13 @@ kind: "package-group"
 <a id="packages"></a>
 ## 包
 
-本组包含两个包；包 README 与下方链接拥有细节。
+本组包含三个包；包 README 与下方链接拥有细节。
 
 | 包 | 提供的能力 |
 |---|---|
 | [`mcp-client/`](mcp-client/README.zh.md) | 挂载一台外部 MCP 服务器，让模型可以把它的工具当作原生工具调用 |
 | [`mcp-oauth/`](mcp-oauth/README.zh.md) | MCP OAuth 能力 seam（`ctx.mcpOAuth`）的 Service Definition 及其 `mcpOAuth` Remote controller |
+| [`mcp-oauth-web/`](mcp-oauth-web/README.zh.md) | `ctx.mcpOAuth` 的 Web provider：SDK 驱动的 OAuth 发现、动态注册、PKCE、一条共享环回回调路由，以及通过 `ctx.credentials` 的授权持久化 |
 
 -----
 
