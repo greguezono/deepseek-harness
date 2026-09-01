@@ -64,6 +64,9 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `reconnect.initialDelayMs` | `500` | First reconnect delay; doubles per consecutive failed attempt |
 | `reconnect.maxDelayMs` | `30,000` | Backoff ceiling; also the uptime after which the attempt budget resets |
 | `reconnect.maxAttempts` | `10` | Consecutive failed attempts per outage before giving up |
+| `oauth.credentialId` | — | streamable-http: stable grant id for `ctx.mcpOAuth` (`[a-z][a-z0-9-]*`); presence activates the OAuth consumer path |
+| `oauth.scopes` | `[]` | Scopes to request; empty omits the scope parameter |
+| `oauth.label` | `serverName` | User-facing label for the authorization flow and status surfaces |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-mcp-client) is the exhaustive source for every accepted field.
 
@@ -89,6 +92,27 @@ Images are supported when the current model accepts image input and the harness 
 The server's tools appear before the harness starts its first turn. When the server changes its tool list, the model's tool set updates automatically; if the update fails, the previous tool set keeps working.
 
 When a server connection drops — for example a local server process crashes — the plugin reconnects automatically with delays that double from 500 ms up to 30 s and then refreshes the tool set; reconnect progress is visible in the logs. During an outage the last known tools stay listed but calls to them fail until the server recovers. After ten consecutive failed attempts the server's tools are removed and reconnection stops until you reload the configuration or restart the harness; a server that stays connected for a while resets that counter. Set `reconnect.enabled: false` to disable automatic reconnection — tools then stay listed but fail until you reload. Editing the configuration entry reloads the server connection in place, and unchanged names stay unchanged.
+
+### OAuth-protected servers
+
+A Streamable HTTP entry can declare an `oauth` block instead of a static `Authorization` header. When `oauth` is set, the plugin acquires a binding through `ctx.mcpOAuth` (provided by `@deepseek-ai/dsh-mcp-oauth-web`); the binding's transport attaches and refreshes tokens through the SDK's OAuth client provider.
+
+```yaml
+- id: mcp-datadog
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    transport: streamable-http
+    serverName: datadog
+    url: https://mcp.datadoghq.com/api/unstable/mcp-server/mcp?toolsets=all
+    oauth:
+      credentialId: datadog
+      scopes: [mcp_all]
+      label: Datadog
+```
+
+Missing user authorization is a wait state: the plugin starts successfully, registers no tools, and does not consume the reconnect budget. The supervisor pauses reconnection when the server returns 401 (authorization required) and resumes with a fresh connection when the grant commits. Set `failOnStartupError: true` for an OAuth entry only if you want non-auth startup failures to abort activation — the wait state itself never triggers it.
+
+OAuth is valid only for Streamable HTTP and cannot coexist with a static `Authorization` header. One grant per `credentialId`; live entries cannot share a `credentialId`. An `oauth` block without an installed `mcpOAuth` provider fails that entry loudly at activation.
 
 -----
 
@@ -194,6 +218,7 @@ These limits describe what you cannot do with this plugin and when it needs oper
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.
 - **Unsupported MCP output schemas are not enforced** — `structuredContent` falls back to `JsonValue` when the advertised schema uses vocabulary outside the harness subset.
 - **Task-required MCP tools are rejected at call time** — a tool that requires the task-based execution extension throws instead of bridging; the extension is not implemented.
+- **OAuth is Streamable HTTP only** — stdio entries cannot declare an `oauth` block, and one grant per `credentialId` is enforced by the provider.
 
 <a id="dev-note"></a>
 ### Dev Note

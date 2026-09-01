@@ -16,9 +16,11 @@
  */
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { UnauthorizedError } from '@modelcontextprotocol/sdk/client/auth.js'
 import { ToolListChangedNotificationSchema } from '@modelcontextprotocol/sdk/types.js'
 import type { Context } from '@deepseek-ai/cordis'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import type { McpOAuthBinding } from '@deepseek-ai/dsh-mcp-oauth'
 import { createTransport } from './transport.ts'
 import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
@@ -118,9 +120,14 @@ export interface ConnectionHandle {
  * @param ctx - Cordis context providing the `tools` registry and logger.
  * @param config - Resolved plugin config selecting the transport and server identity.
  * @param policy - Resolved reconnect policy from {@link resolveReconnectPolicy}.
+ * @param binding - OAuth binding for a streamable-http entry; when set, the
+ *   supervisor waits for `authorized` before connecting and pauses (without
+ *   consuming the attempt budget) on `sign-in-required`.
  * @returns Handle with a `ready` promise for startup-await and a `dispose` for teardown.
  */
-export function startConnection(ctx: Context, config: Config, policy: ResolvedReconnectPolicy): ConnectionHandle {
+export function startConnection(
+  ctx: Context, config: Config, policy: ResolvedReconnectPolicy, binding?: McpOAuthBinding,
+): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
   const opts: ToolBridgeOptions = {
     registrationFailure: 'contain',
@@ -269,7 +276,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
       },
     )
     try {
-      await generation.connect(createTransport(config))
+      await generation.connect(createTransport(config, binding))
       if (hasClosed()) {
         attemptSettled = true
         generationDown(generation)
@@ -291,6 +298,18 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
         ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
         return
       }
+      // Authorization failure: pause reconnection without consuming the attempt
+      // budget. The binding flips to `sign-in-required` via noteUnauthorized,
+      // and the onStatusChange listener enters the wait state. A 401 during an
+      // established connection also surfaces as UnauthorizedError here when the
+      // SDK's own refresh path fails.
+      if (binding !== undefined && error instanceof UnauthorizedError) {
+        client = undefined
+        clientClosed = undefined
+        binding.noteUnauthorized()
+        ctx.logger.warn(`${label}: authorization required — pausing reconnection until sign-in completes`)
+        return
+      }
       generationDown(generation)
       return
     }
@@ -304,8 +323,63 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     if (failedAttempts > 0) ctx.logger.info(`${label}: reconnected and re-synced tools (attempt ${failedAttempts}/${policy.maxAttempts})`)
   }
 
+  /**
+   * Enter the authorization wait state: clear any pending reconnect, close the
+   * current generation, unregister tools, and reset the attempt budget. Does
+   * NOT schedule a reconnect — the `onStatusChange` listener resumes on
+   * `authorized`. Idempotent: a second call when no generation or timer is live
+   * is a no-op.
+   */
+  function enterWaitState(): void {
+    if (reconnectTimer !== undefined) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = undefined
+    }
+    connectedAt = undefined
+    failedAttempts = 0
+    const current = client
+    const currentClosed = clientClosed
+    client = undefined
+    clientClosed = undefined
+    if (current !== undefined) {
+      try { void current.close() } catch { /* transport already gone */ }
+    }
+    void currentClosed
+    syncChain = syncChain.then(() => {
+      for (const dispose of disposers.values()) dispose()
+      disposers = new Map()
+    })
+  }
+
   /** The in-flight (or last settled) connection attempt; dispose awaits it for quiescence. */
-  let settling = connectGeneration(true)
+  let settling: Promise<void>
+
+  // The onStatusChange listener is always registered when a binding is present:
+  // it resumes on `authorized` and pauses on `sign-in-required` regardless of
+  // the initial status. The startup decision (connect vs. wait) is separate.
+  let disposeStatusListener: (() => void) | undefined
+  if (binding !== undefined) {
+    disposeStatusListener = binding.onStatusChange((status) => {
+      if (disposed) return
+      if (status.state === 'authorized') {
+        if (client === undefined && reconnectTimer === undefined) {
+          settling = connectGeneration(false)
+        }
+      } else if (status.state === 'sign-in-required') {
+        enterWaitState()
+      }
+    })
+    ctx.effect(() => () => disposeStatusListener?.(), 'mcp-client.oauth-status')
+  }
+
+  // When an OAuth binding is set and not yet authorized, the supervisor enters
+  // the wait state instead of connecting. Sign-in-required is not a startup
+  // error, so `ready` settles `{}` and `failOnStartupError` never fires on it.
+  if (binding !== undefined && binding.status().state !== 'authorized') {
+    settling = Promise.resolve()
+  } else {
+    settling = connectGeneration(true)
+  }
 
   // The ready promise settles when the first attempt finishes (regardless of
   // success). If the first attempt fails and reconnect is enabled, the
@@ -318,6 +392,8 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     // a server that crashes AFTER a successful initial sync cannot flip client
     // to undefined before this continuation runs.
     if (client !== undefined) return {}
+    // The wait state (binding not authorized) is not an error outcome.
+    if (binding !== undefined && binding.status().state !== 'authorized') return {}
     /* v8 ignore next -- defensive: firstAttemptError is always set when connect/sync fails */
     return { error: firstAttemptError ?? new Error(`${label}: initial connection failed`) }
   })
@@ -326,6 +402,7 @@ export function startConnection(ctx: Context, config: Config, policy: ResolvedRe
     ready,
     async dispose(): Promise<void> {
       disposed = true
+      disposeStatusListener?.()
       if (reconnectTimer !== undefined) {
         clearTimeout(reconnectTimer)
         reconnectTimer = undefined

@@ -6826,6 +6826,9 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-mcp-oauth':
+        specifier: workspace:^
+        version: link:../mcp-oauth
       '@deepseek-ai/dsh-scope':
         specifier: workspace:^
         version: link:../../core/scope

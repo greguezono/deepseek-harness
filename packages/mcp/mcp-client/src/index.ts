@@ -17,6 +17,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
+import type { McpOAuthBinding } from '@deepseek-ai/dsh-mcp-oauth'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
@@ -36,6 +37,9 @@ const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
 
 /** Valid `serverName`, kept below the public tool-name budget. */
 const SERVER_NAME_PATTERN = /^[A-Za-z0-9_-]{1,32}$/
+
+/** Credential-key segment grammar (lowercase hyphenated identifier). */
+const CREDENTIAL_ID_PATTERN = /^[a-z][a-z0-9-]*$/
 
 /**
  * Live `serverName` reservations per registration scope. Agent-scoped MCP
@@ -72,6 +76,16 @@ export interface StdioConfig {
   reconnect?: ReconnectConfig
 }
 
+/** OAuth grant selection for one Streamable HTTP entry; presence turns the OAuth path on. */
+export interface OAuthConfig {
+  /** Stable grant id; the record lives at `mcp-oauth/<credentialId>`. */
+  credentialId: string
+  /** Scopes to request; empty omits the scope parameter. */
+  scopes: string[]
+  /** User-facing label; defaults to the serverName. */
+  label: string
+}
+
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
 export interface StreamableHttpConfig {
   /** Selects Streamable HTTP transport. */
@@ -92,6 +106,8 @@ export interface StreamableHttpConfig {
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** OAuth grant for this server; presence activates the OAuth consumer path through ctx.mcpOAuth. */
+  oauth?: OAuthConfig
 }
 
 /** Configuration for one stdio or Streamable HTTP MCP server. */
@@ -99,8 +115,8 @@ export type Config = StdioConfig | StreamableHttpConfig
 
 type StdioConfigInput = Omit<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>
   & Partial<Pick<StdioConfig, 'args' | 'env' | 'cwd' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
-type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>
-  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError'>>
+type StreamableHttpConfigInput = Omit<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError' | 'oauth'>
+  & Partial<Pick<StreamableHttpConfig, 'headers' | 'toolCallTimeoutMs' | 'failOnStartupError' | 'oauth'>>
 type ConfigInput = StdioConfigInput | StreamableHttpConfigInput
 
 const Reconnect: z<ReconnectConfig> = z.object({
@@ -110,7 +126,7 @@ const Reconnect: z<ReconnectConfig> = z.object({
   maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
 })
 
-export const Config = z.union([
+const configSchema = z.union([
   z.object({
     transport: z.const('stdio'),
     serverName: z.string().required().pattern(SERVER_NAME_PATTERN),
@@ -130,8 +146,39 @@ export const Config = z.union([
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
+    oauth: z.object({
+      credentialId: z.string().required().pattern(CREDENTIAL_ID_PATTERN),
+      scopes: z.array(String).default([]),
+      label: z.string().default(''),
+    }).default(undefined as never),
   }),
 ]) as unknown as z<ConfigInput, Config>
+
+/**
+ * Post-parse validation the schemastery union cannot express: OAuth is valid
+ * only for Streamable HTTP and cannot coexist with a static `Authorization`
+ * header. Schemastery passes unknown keys through, so an `oauth` block on a
+ * stdio entry survives the union and must be rejected here.
+ */
+function validateOAuthConfig(value: Config): Config {
+  if (value.transport === 'streamable-http' && value.oauth !== undefined) {
+    const authHeader = Object.keys(value.headers).find(h => h.toLowerCase() === 'authorization')
+    if (authHeader !== undefined) {
+      throw new Error(`mcp-client(${value.serverName}): oauth cannot be combined with a static "${authHeader}" header — remove one`)
+    }
+  }
+  if (value.transport === 'stdio' && 'oauth' in value) {
+    throw new Error(`mcp-client(${value.serverName}): oauth is valid only for streamable-http transport`)
+  }
+  return value
+}
+
+export const Config: z<ConfigInput, Config> = Object.assign(
+  function config(input: ConfigInput): Config {
+    return validateOAuthConfig(configSchema(input) as Config)
+  } as z<ConfigInput, Config>,
+  configSchema,
+)
 
 // ---- Plugin apply ----
 
@@ -167,10 +214,36 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return () => void names.delete(config.serverName)
   }, 'mcp-client.serverName')
 
+  // Acquire the OAuth binding before starting the supervisor. `ctx.get` keeps
+  // mcpOAuth out of `inject` so non-OAuth deployments run without the seam;
+  // the loud throw satisfies "fails that entry loudly" when the provider is
+  // absent. The mcp-oauth peer is optional, so its value import is deferred to
+  // this call site (the only path that needs it) rather than loaded at module
+  // scope. The effect disposer returns a single Disposable (not the tuple
+  // form the plan's prose suggested) — see vendor/cordis/src/fiber.ts:74-93.
+  let binding: (McpOAuthBinding & { dispose(): void }) | undefined
+  if (config.transport === 'streamable-http' && config.oauth !== undefined) {
+    const mcpOAuth = ctx.get('mcpOAuth')
+    if (mcpOAuth === undefined) {
+      throw new Error(
+        `mcp-client(${config.serverName}): oauth is configured but no mcpOAuth provider is installed — add '@deepseek-ai/dsh-mcp-oauth-web' to the profile`,
+      )
+    }
+    const { mcpOAuthCredentialId } = await import('@deepseek-ai/dsh-mcp-oauth')
+    const registered = mcpOAuth.register({
+      credentialId: mcpOAuthCredentialId(config.oauth.credentialId),
+      serverUrl: new URL(config.url),
+      scopes: config.oauth.scopes,
+      label: config.oauth.label === '' ? config.serverName : config.oauth.label,
+    })
+    binding = registered
+    ctx.effect(() => () => registered.dispose(), 'mcp-client.oauth-binding')
+  }
+
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect)
+  const connection = startConnection(ctx, config, reconnect, binding)
 
   ctx.effect(() => {
     return () => connection.dispose()

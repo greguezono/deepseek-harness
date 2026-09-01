@@ -22,6 +22,9 @@
       "path": "../../core/tools"
     },
     {
+      "path": "../../mcp/mcp-oauth"
+    },
+    {
       "path": "../../core/scope"
     },
     {
