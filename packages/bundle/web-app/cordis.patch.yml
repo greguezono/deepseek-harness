@@ -96,6 +96,15 @@
     - id: settings-controller
       name: '@deepseek-ai/dsh-api-settings-controller'
 
+    # Authorization seam: plugin-owned credential flows (pi-ai logins, OAuth
+    # MCPs). One attempt per key; surfaces talk through the controller below.
+    - id: authorization
+      name: '@deepseek-ai/dsh-authorization'
+
+    # Generic authorization surface over Typert Remote: list/begin/respond/cancel.
+    - id: authorization-controller
+      name: '@deepseek-ai/dsh-api-authorization-controller'
+
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
