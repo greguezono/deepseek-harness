@@ -832,9 +832,11 @@ describe('SubagentModelSelectionCardController', () => {
     const mutate = vi.fn(async (ops: readonly SettingsPathOpView[]) => {
       await write.promise
       const enabled = ops.find(op => op.path[0] === 'enabled')
+      const defaultModel = ops.find(op => op.path[0] === 'defaultModel')
       const allowedModels = ops.find(op => op.path[0] === 'allowedModels')
       host.publish({ value: {
         enabled: enabled?.op === 'set' ? enabled.value as boolean : false,
+        defaultModel: defaultModel?.op === 'set' ? defaultModel.value as never : undefined,
         allowedModels: allowedModels?.op === 'set' ? allowedModels.value as never[] : [],
       } })
     })

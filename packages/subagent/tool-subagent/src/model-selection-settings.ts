@@ -96,7 +96,7 @@ export class SubagentModelSelectionConfig extends Service {
 
   /**
    * Read a detached selection preference for the next eligible Agent publication.
-   * @returns the enabled state and exact allowed routes.
+   * @returns the enabled state, default route, and exact allowed routes.
    */
   current(): SubagentModelSelectionSettings {
     const current = this.source()

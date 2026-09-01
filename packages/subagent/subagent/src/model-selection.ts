@@ -32,6 +32,7 @@ export function modelRouteKey(route: AllowedModelRoute): string {
 /**
  * Reject malformed or duplicate route entries at a durable or configuration boundary.
  * @param routes - candidate exact routes to validate.
+ * @returns Assertion that the value is an exact-route array.
  */
 export function assertAllowedModelRoutes(routes: unknown): asserts routes is readonly AllowedModelRoute[] {
   if (!Array.isArray(routes)) {

@@ -10,13 +10,13 @@ Status: implemented
 
 ## Decision
 
-Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 开关与 `allowedModels`，后者是由精确 `{ provider, model }` 路由组成的数组。启用时必须至少有一条路由；关闭时可以保留已选路由，供以后重新启用。Plugins 设置卡通过 `session/modelCatalog` 读取实时适配器目录，让用户暂存开关与路由，再在一次带 revision 限制的设置 mutation 中保存两个字段。它不保存适配器自有的显示名称、描述或推理强度元数据。当前目录中缺失的已存或暂存路由仍显示为不可用并允许移除；某个提供方的目录失败不会阻塞其他提供方，也不会清除已存授权或未保存选择。连接重置会丢弃草稿，因为 namespace revision 只能在同一个 Host 进程内比较。
+Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 开关、`defaultModel` 与 `allowedModels`，后者是由精确 `{ provider, model }` 路由组成的数组。启用时必须至少有一条路由，且默认路由必须在该列表内；关闭时可以保留已选路由，供以后重新启用。Plugins 设置卡通过 `session/modelCatalog` 读取实时适配器目录，让用户暂存开关与路由，再在一次带 revision 限制的设置 mutation 中保存全部三个字段。它不保存适配器自有的显示名称、描述或推理强度元数据。当前目录中缺失的已存或暂存路由仍显示为不可用并允许移除；某个提供方的目录失败不会阻塞其他提供方，也不会清除已存授权或未保存选择。连接重置会丢弃草稿，因为 namespace revision 只能在同一个 Host 进程内比较。
 
-设置启用时，新组合的顶层 Session 会在模型可选定义进入请求之前，把路由列表快照记录为 `subagent/model-selection-policy`。事件存在就表示模型选择已启用；事件不保存全局开关。子 Session 从在线父级继承同一份精确列表，恢复的 Session 使用已记录事件而不是当前设置。因此，设置修改只影响之后组合的顶层 Session，而已有非空日志但没有该事件的 Session 仍保持禁用。
+设置启用时，新组合的顶层 Session 会在模型可选定义进入请求之前，把默认路由与路由列表快照记录为 `subagent/model-selection-policy`。事件存在就表示模型选择已启用；事件不保存全局开关。子 Session 从在线父级继承同一份精确策略，恢复的 Session 使用已记录事件而不是当前设置。因此，设置修改只影响之后组合的顶层 Session，而已有非空日志但没有该事件的 Session 仍保持禁用。
 
-固定的 `list_subagent_models` schema 不会枚举该策略。调用时，提供方和模型列表是 Session 路由列表与适配器实时公布目录的交集。精确 provider/model 查询先要求授权，再解析适配器自有的模型元数据和全部已公布推理强度。委派执行器还会独立拒绝任何生效 provider/model 路由不在 Session 列表内的显式提供方、模型或强度选择，然后才由 `resolveCallConfig()` 校验适配器可用性与强度支持。完全没有选择字段的调用保留配置或继承路由，因为模型没有作出路由选择。
+固定的 `list_subagent_models` schema 不会枚举该策略。调用时，提供方和模型列表是 Session 路由列表与适配器实时公布目录的交集。精确 provider/model 查询先要求授权，再解析适配器自有的模型元数据和全部已公布推理强度。中央 `SubagentRuntime` 会在提供方开始工作前解析每次一次性与可继续启动。它用 Session 默认值补齐省略的路由，拒绝不完整路由和 Session 列表外的精确路由，再调用 `resolveCallConfig()` 校验适配器可用性与强度支持。这项强制执行同时适用于工具调用与直接服务调用方。
 
-模型选择不再有无限制的静态模式。默认关闭的 Host 设置是唯一授权来源，启用的 Session 始终携带精确允许列表。主 spawn 工具读取该设置；随附 fork 工具仍不公开路由选择，使继承的对话前缀继续符合提供方侧 KV Cache 复用条件。
+模型选择不再有无限制的静态模式。默认关闭的 Host 设置是唯一授权来源，启用的 Session 始终携带精确允许列表。主 spawn 工具读取该设置；随附 fork 工具仍不公开面向模型的路由字段，使继承的对话前缀继续符合提供方侧 KV Cache 复用条件。运行时仍会把 Session 默认路由应用于其子级启动。
 
 ## Alternatives considered
 
@@ -24,7 +24,7 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 
 **只过滤设置 UI 或发现结果。** 不采用，因为模型可以猜测路由，或从较早的 transcript 中保留路由。授权由启动子级的执行器强制执行。
 
-**从非空 `allowedModels` 数组推断是否启用。** 不采用，因为关闭功能时要么必须丢弃仍有用的选择，要么要保留一个含义取决于写入历史的非空数组。显式开关是权威依据，设置 scope 会在一次由 Host 校验的 mutation 中提交两个字段，因此不会持久化中间状态。
+**从非空 `allowedModels` 数组推断是否启用。** 不采用，因为关闭功能时要么必须丢弃仍有用的选择，要么要保留一个含义取决于写入历史的非空数组。显式开关是权威依据，设置 scope 会在一次由 Host 校验的 mutation 中提交全部三个字段，因此不会持久化中间状态。
 
 **保存每条路由的推理强度允许列表。** 不采用，因为用户决定针对子级模型，而强度 id 与兼容性属于精确适配器路由。路由获准后，仍可使用适配器支持的每种强度。
 
@@ -36,7 +36,7 @@ Host 自有的 `subagent-model-selection` 设置 section 保存显式 `enabled` 
 - 适配器移除或目录失败可以减少发现当前列出的内容，但不会删除已存路由决定；即使建议性目录省略某条精确已授权路由，只要适配器接受它，该路由仍然可用。
 - 允许列表本身不消耗父级请求 token。只有 `list_subagent_models` 结果进入 transcript。
 - 策略事件仅存在于日志，并在 Agent 组合期间、两套 SDK 开始订阅运行前追加。随附 SDK profile 不启用这项 Web 自有偏好，因此该事件不会改变任一 SDK 的预期通知或持久 Session 输出；其持久投影由包级恢复测试负责，不会为了发出该事件而虚构 SDK 组合。
-- 单元覆盖固定设置校验、异常持久值、Session 取样与继承、发现交集、执行器拒绝、UI 实时目录失效、暂存路由保留、连接换代失效、暂存后的整数组写入、陈旧 revision 拒绝，以及作用域安装失败后的重试。组装 Web 场景固定真实设置文档与 Plugins 设置卡流程。
+- 单元覆盖固定设置校验、默认路由成员资格、异常持久值、Session 取样与继承、发现交集、执行器拒绝、UI 实时目录失效、暂存路由保留、连接换代失效、暂存后的整数组写入、陈旧 revision 拒绝，以及作用域安装失败后的重试。组装 Web 场景固定真实设置文档与 Plugins 设置卡流程。
 
 ## Related decisions
 
