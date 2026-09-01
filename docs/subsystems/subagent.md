@@ -116,6 +116,8 @@ The caller-facing request does not carry catalog format details or continuation 
 interface ResolvedSubagentStartRequest extends SubagentStartRequest {
   /** Detached descriptor a session-backed provider persists in the child log. */
   readonly descriptor: SubagentDescriptorData
+  /** Parent policy values captured synchronously when delegation starts. */
+  readonly delegatedPolicies?: DelegatedPolicyOverrides
 }
 ```
 
