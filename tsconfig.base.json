@@ -59,6 +59,8 @@
       "@deepseek-ai/dsh-mcp-oauth/controller": ["./packages/mcp/mcp-oauth/src/controller.ts"],
       "@deepseek-ai/dsh-mcp-oauth/invariant": ["./packages/mcp/mcp-oauth/src/invariant.ts"],
       "@deepseek-ai/dsh-mcp-oauth/types": ["./packages/mcp/mcp-oauth/src/types.ts"],
+      "@deepseek-ai/dsh-mcp-oauth-web": ["./packages/mcp/mcp-oauth-web/src/index.ts"],
+      "@deepseek-ai/dsh-mcp-oauth-web/invariant": ["./packages/mcp/mcp-oauth-web/src/invariant.ts"],
       "@deepseek-ai/dsh-api-settings-controller": ["./packages/api/settings-controller/src/index.ts"],
       "@deepseek-ai/dsh-api-settings-controller/invariant": ["./packages/api/settings-controller/src/invariant.ts"],
       "@deepseek-ai/dsh-api-settings-controller/types": ["./packages/api/settings-controller/src/types.ts"],

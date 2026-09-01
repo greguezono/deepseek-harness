@@ -167,6 +167,7 @@ const SENTENCE_MODEL_EXPERIENCE: Readonly<Record<string, SentenceContract>> = {
   'packages/api/gateway': { kind: 'none', reason: 'Remote dispatch infrastructure; invoked business methods own any model-visible effect.' },
   'packages/api/authorization-controller': { kind: 'none', reason: 'Remote owner for the generic authorization surface; it registers no prompt, tool, or session event.' },
   'packages/mcp/mcp-oauth': { kind: 'none', reason: 'Service Definition for the MCP OAuth seam; it registers no prompt, tool, or session event — tools arrive through dsh-mcp-client.' },
+  'packages/mcp/mcp-oauth-web': { kind: 'none', reason: 'Web provider for the MCP OAuth seam; it owns OAuth protocol and grant persistence but registers no prompt, tool, or session event — tools arrive through dsh-mcp-client.' },
   'packages/api/session-controller': { kind: 'none', reason: 'Session API and transport owner; invoked Agent commands own any model-visible effect.' },
   'packages/api/settings-controller': { kind: 'none', reason: 'Configuration-surface API owner; it registers no prompt, tool, or session event.' },
   'packages/api/workspace-controller': { kind: 'none', reason: 'Workspace API and state projection owner; it registers no prompt, tool, or session event.' },

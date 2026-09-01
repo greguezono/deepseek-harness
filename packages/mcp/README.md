@@ -22,12 +22,13 @@ The `mcp/` group connects the harness to the Model Context Protocol (MCP) ecosys
 <a id="packages"></a>
 ## Packages
 
-The group holds two packages; the package README and the links below own the details.
+The group holds three packages; the package README and the links below own the details.
 
 | Package | What it provides |
 |---|---|
 | [`mcp-client/`](mcp-client/README.md) | Attach one external MCP server so the model can call its tools as native tools |
 | [`mcp-oauth/`](mcp-oauth/README.md) | Service Definition for the MCP OAuth capability seam (`ctx.mcpOAuth`) and its `mcpOAuth` Remote controller |
+| [`mcp-oauth-web/`](mcp-oauth-web/README.md) | Web provider for `ctx.mcpOAuth`: SDK-driven OAuth discovery, dynamic registration, PKCE, one shared loopback callback route, and grant persistence through `ctx.credentials` |
 
 -----
 

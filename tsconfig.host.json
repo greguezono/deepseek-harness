@@ -154,6 +154,7 @@
     { "path": "./packages/api/settings-controller" },
     { "path": "./packages/api/authorization-controller" },
     { "path": "./packages/mcp/mcp-oauth" },
+    { "path": "./packages/mcp/mcp-oauth-web" },
     { "path": "./packages/api/workspace-controller/tsconfig.host.json" },
     { "path": "./packages/typert/loader" },
     { "path": "./packages/session/session-persistence" },
