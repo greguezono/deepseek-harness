@@ -423,13 +423,13 @@ export class SubagentContinuationManager {
     const request = spec.request
     const parent = request.parent
     this.assertAdmitting(parent)
-    const persistence = this.requirePersistence()
     assertSubagentMaxDepth(request.maxDepth)
     const childId = spec.childId ?? brandString<SessionId>(randomUUID())
     this.assertChildIdAvailable(childId)
     const childDepth = resolveChildDepth(parent, request.maxDepth)
     const resolvedAgentOptions = await this.host.resolveChildRoute(parent, request.agentOptions, spec.signal)
     spec.signal.throwIfAborted()
+    const persistence = this.requirePersistence()
     // Snapshot before provider preparation: invalid descriptor JSON rejects the
     // call before a child exists, and the detached value is what reaches the log.
     const agentOptions = resolveChildAgentOptions(parent, resolvedAgentOptions, childDepth)

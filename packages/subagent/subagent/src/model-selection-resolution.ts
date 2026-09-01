@@ -23,7 +23,10 @@ export async function resolveChildRoute(
   const policy = projections === undefined
     ? undefined
     : subagentModelSelectionPolicy(projections, parent.session)
-  if (policy === undefined) return requested
+  const hasSelection = requested?.provider !== undefined
+    || requested?.model !== undefined
+    || requested?.reasoningEffort !== undefined
+  if (policy === undefined && !hasSelection) return requested
 
   const hasProvider = requested?.provider !== undefined
   const hasModel = requested?.model !== undefined
@@ -31,9 +34,13 @@ export async function resolveChildRoute(
     throw new Error('child LLM `provider` and `model` must be supplied together')
   }
 
-  const provider = requested?.provider ?? policy.defaultModel.provider
-  const model = requested?.model ?? policy.defaultModel.model
-  if (!policy.routes.some(route => route.provider === provider && route.model === model)) {
+  const parentOptions = parentAgentOptionsForDelegation(parent)
+  const provider = requested?.provider ?? policy?.defaultModel.provider ?? parentOptions.provider
+  const model = requested?.model ?? policy?.defaultModel.model ?? parentOptions.model
+  if (provider === undefined || model === undefined) {
+    throw new Error('cannot select child LLM values without an effective provider and model')
+  }
+  if (policy !== undefined && !policy.routes.some(route => route.provider === provider && route.model === model)) {
     throw new Error(`child LLM route "${provider}/${model}" is not allowed for this Session`)
   }
 
@@ -42,10 +49,10 @@ export async function resolveChildRoute(
     throw new Error('cannot resolve the selected child LLM route because the `llm` service is unavailable')
   }
 
-  const parentOptions = parentAgentOptionsForDelegation(parent)
+  const routeRequested = requested?.provider !== undefined || requested?.model !== undefined
   const routeChanged = provider !== parentOptions.provider || model !== parentOptions.model
   const reasoningEffort = requested?.reasoningEffort
-    ?? (routeChanged ? undefined : parentOptions.reasoningEffort)
+    ?? (routeRequested || routeChanged ? undefined : parentOptions.reasoningEffort)
   const resolved = await llm.resolveCallConfig({
     provider,
     model,
@@ -57,6 +64,8 @@ export async function resolveChildRoute(
     ...requested,
     provider: resolved.provider,
     model: resolved.model,
-    ...resolved.reasoningEffort === undefined ? {} : { reasoningEffort: resolved.reasoningEffort },
+    ...(reasoningEffort === undefined && requested?.reasoningEffort === undefined
+      ? {}
+      : resolved.reasoningEffort === undefined ? {} : { reasoningEffort: resolved.reasoningEffort }),
   }
 }

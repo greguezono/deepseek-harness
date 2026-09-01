@@ -12,17 +12,16 @@ import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import AgentLoop from '@deepseek-ai/dsh-agent-loop'
 import { mountAgentLoopTestDependencies } from '@deepseek-ai/dsh-agent-loop-testkit'
 import SessionProjectionRegistry from '@deepseek-ai/dsh-session-projection'
-import SubagentRuntime from '@deepseek-ai/dsh-subagent'
+import SubagentRuntime, {
+  subagentModelSelectionPolicy,
+  subagentModelSelectionProjectionDefinition,
+} from '@deepseek-ai/dsh-subagent'
 import * as SubagentSpawn from '@deepseek-ai/dsh-subagent-spawn-in-process'
 import * as tool from '../src/index.ts'
 import * as ToolInvariant from '../src/invariant.ts'
 import SubagentModelSelectionConfig, {
   SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE,
 } from '../src/model-selection-settings.ts'
-import {
-  subagentModelSelectionPolicy,
-  subagentModelSelectionProjectionDefinition,
-} from '../src/model-selection-state.ts'
 import { text } from './harness.ts'
 
 const ALLOWED_MODELS = [{ provider: 'alpha', model: 'fast-model' }]
@@ -90,9 +89,9 @@ async function createAgent(ctx: Context, id: string, options: {
 describe('SubagentModelSelectionConfig', () => {
   it('uses the composed default without a settings provider', async () => {
     const ctx = new Context()
-    await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, allowedModels: ALLOWED_MODELS })
+    await ctx.plugin(SubagentModelSelectionConfig, { enabled: true, defaultModel: ALLOWED_MODELS[0]!, allowedModels: ALLOWED_MODELS })
 
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: true, allowedModels: ALLOWED_MODELS })
+    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: true, defaultModel: ALLOWED_MODELS[0]!, allowedModels: ALLOWED_MODELS })
     await ctx.fiber.dispose()
   })
 
@@ -101,12 +100,13 @@ describe('SubagentModelSelectionConfig', () => {
     await ctx.plugin(MemorySettings)
     await ctx.plugin(SubagentModelSelectionConfig)
 
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, allowedModels: [] })
+    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, defaultModel: undefined, allowedModels: [] })
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: ALLOWED_MODELS,
     })
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: true, allowedModels: ALLOWED_MODELS })
+    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: true, defaultModel: ALLOWED_MODELS[0]!, allowedModels: ALLOWED_MODELS })
     await ctx.fiber.dispose()
   })
 
@@ -123,26 +123,30 @@ describe('SubagentModelSelectionConfig', () => {
 
     await expect(ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: [],
     })).rejects.toThrow('enabled subagent model selection requires at least one allowed model')
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: false,
       allowedModels: ALLOWED_MODELS,
     })
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, allowedModels: ALLOWED_MODELS })
+    expect(ctx.subagentModelSelection.current()).toEqual({
+      enabled: false,
+      defaultModel: undefined,
+      allowedModels: ALLOWED_MODELS,
+    })
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, { allowedModels: [] })
-    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, allowedModels: [] })
+    expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, defaultModel: undefined, allowedModels: [] })
 
     const invalid = Session.create(SessionId('empty-policy'))
     invalid.append('subagent/model-selection-policy', { allowedModels: [] })
-    expect(() => subagentModelSelectionPolicy(ctx.sessionProjections, invalid)).toThrow('requires at least one route')
+    expect(subagentModelSelectionPolicy(ctx.sessionProjections, invalid)).toBeUndefined()
 
     const malformed = Session.create(SessionId('malformed-policy'))
     malformed.append('subagent/model-selection-policy', {
       allowedModels: [{ provider: 1, model: 'fast-model' }],
     } as never)
-    expect(() => subagentModelSelectionPolicy(ctx.sessionProjections, malformed))
-      .toThrow('requires non-empty provider and model ids')
+    expect(subagentModelSelectionPolicy(ctx.sessionProjections, malformed)).toBeUndefined()
     await ctx.fiber.dispose()
   })
 
@@ -154,10 +158,14 @@ describe('SubagentModelSelectionConfig', () => {
 
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: ALLOWED_MODELS,
     })
     const enabled = await createAgent(ctx, 'enabled')
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, enabled.session)).toEqual(ALLOWED_MODELS)
+    expect(subagentModelSelectionPolicy(ctx.sessionProjections, enabled.session)).toEqual({
+      defaultModel: ALLOWED_MODELS[0],
+      routes: ALLOWED_MODELS,
+    })
     expect(selectable(ctx, enabled)).toBe(true)
     expect(selectable(ctx, disabled)).toBe(false)
 
@@ -172,6 +180,7 @@ describe('SubagentModelSelectionConfig', () => {
     const ctx = await boot()
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: ALLOWED_MODELS,
     })
     const agent = await createAgent(ctx, 'enforced')
@@ -219,6 +228,7 @@ describe('SubagentModelSelectionConfig', () => {
     expect(selectable(ctx, disabled.agent)).toBe(false)
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: ALLOWED_MODELS,
     })
     const enabled = await createComposed('preset-enabled')
@@ -274,7 +284,7 @@ describe('SubagentModelSelectionConfig', () => {
     binding!.rebind(scopeOf(preset.ctx)!)
     vi.spyOn(ctx.subagentModelSelection, 'current')
       .mockImplementationOnce(() => { throw new Error('transient settings read') })
-      .mockReturnValue({ enabled: true, allowedModels: ALLOWED_MODELS })
+      .mockReturnValue({ enabled: true, defaultModel: ALLOWED_MODELS[0]!, allowedModels: ALLOWED_MODELS })
 
     expect(() => { ctx.emit(scopeTarget({}, scopeOf(preset.ctx)), 'tools/change') })
       .toThrow('transient settings read')
@@ -289,6 +299,7 @@ describe('SubagentModelSelectionConfig', () => {
     const ctx = await boot()
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: ALLOWED_MODELS,
     })
     const parent = await createAgent(ctx, 'parent')
@@ -297,7 +308,10 @@ describe('SubagentModelSelectionConfig', () => {
       meta: { parentSession: parent.id, origin: 'subagent' },
     })
     expect(selectable(ctx, child)).toBe(true)
-    expect(subagentModelSelectionPolicy(ctx.sessionProjections, child.session)).toEqual(ALLOWED_MODELS)
+    expect(subagentModelSelectionPolicy(ctx.sessionProjections, child.session)).toEqual({
+      defaultModel: ALLOWED_MODELS[0],
+      routes: ALLOWED_MODELS,
+    })
 
     const orphan = await createAgent(ctx, 'orphan', {
       meta: { parentSession: SessionId('missing-parent'), origin: 'subagent' },
@@ -305,13 +319,17 @@ describe('SubagentModelSelectionConfig', () => {
     expect(selectable(ctx, orphan)).toBe(false)
 
     const enabledSeed = Session.create(SessionId('enabled-seed'))
-    enabledSeed.append('subagent/model-selection-policy', { allowedModels: ALLOWED_MODELS })
+    enabledSeed.append('subagent/model-selection-policy', {
+      defaultModel: ALLOWED_MODELS[0]!,
+      allowedModels: ALLOWED_MODELS,
+    })
     const resumedEnabled = await createAgent(ctx, 'resumed-enabled', { seed: enabledSeed.events })
     expect(selectable(ctx, resumedEnabled)).toBe(true)
 
     const oldSeed = Session.create(SessionId('old-seed'), [])
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: ALLOWED_MODELS,
     })
     const resumedDisabled = await createAgent(ctx, 'resumed-disabled', { seed: oldSeed.events })
@@ -368,6 +386,7 @@ describe('SubagentModelSelectionConfig', () => {
 
     await ctx.settings.update(SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE, {
       enabled: true,
+      defaultModel: ALLOWED_MODELS[0]!,
       allowedModels: ALLOWED_MODELS,
     })
     const enabled = await createAgent(ctx, 'invariant-enabled')

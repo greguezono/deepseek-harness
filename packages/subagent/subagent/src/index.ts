@@ -576,6 +576,9 @@ export class SubagentRuntime extends TypertRemoteService {
     assertSubagentMaxDepth(request.maxDepth)
     if (request.outputSchema !== undefined) assertObjectJsonSchema(request.outputSchema)
     const resolvedAgentOptions = await this.resolveChildRoute(request.parent, request.agentOptions, request.signal)
+    if (this.getProvider(name) !== provider) {
+      throw new Error(`subagent provider "${name}" changed while resolving the child LLM route; retry the delegation`)
+    }
     const descriptor = snapshotSubagentDescriptor({
       mode: 'one-shot',
       provider: name,

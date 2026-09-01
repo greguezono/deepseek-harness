@@ -19,25 +19,25 @@ import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import {
   assertSubagentMaxDepth,
   parentAgentOptionsForDelegation,
+  recordSubagentModelSelection,
   settleRun,
+  subagentModelSelectionPolicy,
 } from '@deepseek-ai/dsh-subagent'
-import type { SubagentProvider, SubagentResult, SubagentRun } from '@deepseek-ai/dsh-subagent'
+import type {
+  ModelSelectionPolicy,
+  SubagentProvider,
+  SubagentResult,
+  SubagentRun,
+} from '@deepseek-ai/dsh-subagent'
 import type { JobOutcome } from '@deepseek-ai/dsh-jobs'
 import {
-  assertAllowedModelSelection,
   hasConfiguredLlmSelection,
   hasDelegationModelRequest,
-  preflightChildLlmRoute,
   requestedAgentOptions,
 } from './model-selection.ts'
-import type { DelegationModelRequest, ModelSelectionPolicy } from './model-selection.ts'
+import type { DelegationModelRequest } from './model-selection.ts'
 import { registerListSubagentModels } from './list-models.ts'
 import type {} from './model-selection-settings.ts'
-import {
-  recordSubagentModelSelection,
-  subagentModelSelectionProjectionDefinition,
-  subagentModelSelectionPolicy,
-} from './model-selection-state.ts'
 
 export const name = 'tool-subagent'
 export const inject = ['tools', 'subagents', 'systemPrompt', 'sessionProjections']
@@ -317,7 +317,6 @@ export function apply(ctx: Context, config: Config): void {
   const toolName = config.toolName ?? 'subagent'
 
   const modelSelectionCapable = config.modelSelectionSettings === true
-  ctx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
 
   const assertSubagentProviderConfiguration = (subagentProvider: SubagentProvider): void => {
     if (typeof config.maxDepth === 'number' && !subagentProvider.capabilities.depthLimit) {
@@ -482,28 +481,6 @@ export function apply(ctx: Context, config: Config): void {
             modelRequest,
             modelSelectionEnabled,
           )
-          assertAllowedModelSelection(
-            modelSelectionPolicy,
-            parentOptions,
-            requestedChildAgentOptions,
-            modelRequest,
-          )
-          if (requiresRoutePreflight) {
-            const llm = runtimeCtx.get('llm')
-            if (llm === undefined) {
-              throw new Error('cannot resolve the selected child LLM route because the `llm` service is unavailable')
-            }
-            await preflightChildLlmRoute(
-              llm,
-              parentOptions,
-              requestedChildAgentOptions,
-              exec.signal,
-              providerRouteDefaults === undefined,
-            )
-            if (runtimeCtx.subagents.getProvider(config.provider) !== subagentProvider) {
-              throw new Error(`subagent provider "${config.provider}" changed while resolving the child LLM route; retry the delegation`)
-            }
-          }
           exec.signal.throwIfAborted()
           const maxDepth = typeof config.maxDepth === 'number' ? config.maxDepth : undefined
           const request = {
@@ -617,25 +594,27 @@ export function apply(ctx: Context, config: Config): void {
   }
 
   const selectForAgent = (agent: NonNullable<Context['agent']>): ModelSelectionPolicy | undefined => {
-    let allowedModels = subagentModelSelectionPolicy(ctx.sessionProjections, agent.session)
-    if (allowedModels === undefined) {
+    let policy = subagentModelSelectionPolicy(ctx.sessionProjections, agent.session)
+    if (policy === undefined) {
       const parentId = agent.session.header.origin === 'subagent'
         ? agent.session.header.parentSession
         : undefined
       if (parentId !== undefined) {
         const parent = ctx.get('agents')?.get(parentId)
-        allowedModels = parent === undefined
+        policy = parent === undefined
           ? undefined
           : subagentModelSelectionPolicy(ctx.sessionProjections, parent.session)
       } else if (agent.session.firstLiveSeq === 0) {
         const current = settings.current()
-        allowedModels = current.enabled ? current.allowedModels : undefined
+        policy = current.enabled && current.defaultModel !== undefined
+          ? { defaultModel: current.defaultModel, routes: current.allowedModels }
+          : undefined
       }
     }
-    if (allowedModels !== undefined) {
-      recordSubagentModelSelection(ctx.sessionProjections, agent.session, allowedModels)
+    if (policy !== undefined) {
+      recordSubagentModelSelection(ctx.sessionProjections, agent.session, policy)
     }
-    return allowedModels === undefined ? undefined : { routes: allowedModels }
+    return policy
   }
 
   const agent = ctx.agent

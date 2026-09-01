@@ -6,7 +6,7 @@
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
-import { subagentModelSelectionPolicy } from './model-selection-state.ts'
+import { subagentModelSelectionPolicy } from '@deepseek-ai/dsh-subagent'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-tool-subagent'
 
