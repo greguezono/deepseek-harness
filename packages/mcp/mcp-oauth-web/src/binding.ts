@@ -195,7 +195,10 @@ export class Binding implements McpOAuthBinding {
     this.setStatus({ state: 'sign-in-required' })
   }
 
-  /** One binding's safe entry for `list()`. */
+  /**
+   * One binding's safe entry for `list()`.
+   * @returns the safe entry view with no token or verifier fields.
+   */
   entry(): McpOAuthEntry {
     return {
       credentialId: String(this.credentialId),
@@ -248,7 +251,10 @@ export class Binding implements McpOAuthBinding {
     }
   }
 
-  /** Remember the state the SDK generated for this attempt. */
+  /**
+   * Remember the state the SDK generated for this attempt.
+   * @param state - the OAuth state parameter to correlate the callback.
+   */
   rememberState(state: string): void {
     if (this.attempt !== undefined) this.attempt.state = state
   }
@@ -258,6 +264,7 @@ export class Binding implements McpOAuthBinding {
    * registry and notify the human. Outside an attempt (transport-initiated
    * auth with no human to drive the browser) the binding returns to
    * `sign-in-required` instead.
+   * @param url - the authorization endpoint URL the SDK produced.
    */
   publishAuthUrl(url: URL): void {
     if (this.attempt === undefined) {
@@ -271,19 +278,28 @@ export class Binding implements McpOAuthBinding {
     this.attempt.session.notify({ message: 'Open this page to sign in', url: String(url) })
   }
 
-  /** Persist the PKCE verifier before the URL is published. */
+  /**
+   * Persist the PKCE verifier before the URL is published.
+   * @param codeVerifier - the PKCE code verifier string.
+   */
   async saveCodeVerifier(codeVerifier: string): Promise<void> {
     if (this.attempt === undefined) throw new Error('no authorization attempt is running')
     this.attempt.codeVerifier = codeVerifier
   }
 
-  /** @returns the PKCE verifier for the running attempt. */
+  /**
+   * Return the PKCE verifier for the running attempt.
+   * @returns the PKCE code verifier string.
+   */
   async codeVerifier(): Promise<string> {
     if (this.attempt === undefined) throw new Error('no authorization attempt is running')
     return this.attempt.codeVerifier
   }
 
-  /** Merge registered client information into the grant record. */
+  /**
+   * Merge registered client information into the grant record.
+   * @param info - the dynamic client registration result.
+   */
   async saveClientInformation(info: OAuthClientInformationMixed): Promise<void> {
     await this.modifyGrant(payload => ({
       serverUrl: this.serverUrl.toString(),
@@ -293,7 +309,10 @@ export class Binding implements McpOAuthBinding {
     }))
   }
 
-  /** Commit tokens, then flip to `authorized` (commit-then-emit). */
+  /**
+   * Commit tokens, then flip to `authorized` (commit-then-emit).
+   * @param tokens - the OAuth token set from the code exchange.
+   */
   async saveTokens(tokens: OAuthTokens): Promise<void> {
     await this.modifyGrant(payload => ({
       serverUrl: this.serverUrl.toString(),
@@ -304,7 +323,10 @@ export class Binding implements McpOAuthBinding {
     this.setStatus({ state: 'authorized' })
   }
 
-  /** Clear credentials per the SDK's invalidation scope. */
+  /**
+   * Clear credentials per the SDK's invalidation scope.
+   * @param scope - `'all'` deletes the grant record; `'tokens'` removes only the tokens field.
+   */
   async invalidateScope(scope: 'all' | 'tokens'): Promise<void> {
     if (scope === 'all') {
       await this.credentials.deleteRecord(this.key)
@@ -318,7 +340,10 @@ export class Binding implements McpOAuthBinding {
     })
   }
 
-  /** Read and validate the stored grant; a stale payload reads as absent. */
+  /**
+   * Read and validate the stored grant; a stale payload reads as absent.
+   * @returns the validated grant payload, or `undefined` when stale or malformed.
+   */
   async readGrant(): Promise<GrantPayload | undefined> {
     const record = await this.credentials.readRecord(this.key)
     if (record === undefined || record.kind !== 'grant') return undefined

@@ -1,0 +1,11 @@
+- insert:
+    - id: mcp-datadog
+      name: '@deepseek-ai/dsh-mcp-client'
+      config:
+        transport: streamable-http
+        serverName: datadog
+        url: https://mcp.datadoghq.com/api/unstable/mcp-server/mcp?toolsets=all
+        oauth:
+          credentialId: datadog
+          scopes: [mcp_all]
+          label: Datadog
