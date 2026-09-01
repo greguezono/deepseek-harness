@@ -122,9 +122,15 @@ describe('mcp-client oauth path', () => {
     } as never)).toThrow()
   })
 
-  it('an oauth entry without a mcpOAuth provider fails that entry loudly', async () => {
-    await expect(apply(ctx, oauthHttpConfig('https://x/mcp')))
-      .rejects.toThrow(/mcpOAuth/)
+  it('an oauth entry without a mcpOAuth provider waits for the service rather than failing immediately', async () => {
+    // During parallel boot, mcp-oauth-web may activate after this entry.
+    // The entry waits for the internal/service event instead of throwing.
+    const promise = apply(ctx, oauthHttpConfig('https://x/mcp'))
+    const settled = await Promise.race([
+      promise.then(() => true, () => true),
+      sleep(150).then(() => false),
+    ])
+    expect(settled).toBe(false)
   })
 
   it('sign-in-required is a wait state: no tools, no reconnect burn, startup succeeds even with failOnStartupError', async () => {

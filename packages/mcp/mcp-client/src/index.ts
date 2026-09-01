@@ -17,7 +17,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
-import type { McpOAuthBinding } from '@deepseek-ai/dsh-mcp-oauth'
+import type { McpOAuthBinding, McpOAuthService } from '@deepseek-ai/dsh-mcp-oauth'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
@@ -234,27 +234,48 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return () => void names.delete(config.serverName)
   }, 'mcp-client.serverName')
 
-  // Acquire the OAuth binding before starting the supervisor. `ctx.get` keeps
-  // mcpOAuth out of `inject` so non-OAuth deployments run without the seam;
-  // the loud throw satisfies "fails that entry loudly" when the provider is
-  // absent. The mcp-oauth peer is optional, so its value import is deferred to
-  // this call site (the only path that needs it) rather than loaded at module
-  // scope. The effect disposer returns a single Disposable (not the tuple
-  // form the plan's prose suggested) — see vendor/cordis/src/fiber.ts:74-93.
+  // Acquire the OAuth binding before starting the supervisor. The mcpOAuth
+  // service is kept out of `inject` so non-OAuth deployments run without the
+  // seam. When `oauth` is configured and the service is not yet registered
+  // (mcp-oauth-web activates in parallel and waits for its own inject
+  // dependencies), listen for the `internal/service` event. A 30s timeout
+  // fails loud when the provider is absent from the profile. The mcp-oauth
+  // peer is optional, so its value import is deferred to this call site.
+  // The effect disposer returns a single Disposable — see
+  // vendor/cordis/src/fiber.ts:74-93.
   let binding: (McpOAuthBinding & { dispose(): void }) | undefined
   if (config.transport === 'streamable-http' && config.oauth !== undefined) {
-    const mcpOAuth = ctx.get('mcpOAuth')
-    if (mcpOAuth === undefined) {
-      throw new Error(
-        `mcp-client(${config.serverName}): oauth is configured but no mcpOAuth provider is installed — add '@deepseek-ai/dsh-mcp-oauth-web' to the profile`,
-      )
-    }
+    const oauth = config.oauth
     const { mcpOAuthCredentialId } = await import('@deepseek-ai/dsh-mcp-oauth')
+    let mcpOAuth: McpOAuthService | undefined = ctx.get('mcpOAuth')
+    if (mcpOAuth === undefined) {
+      mcpOAuth = await new Promise<McpOAuthService>((resolve, reject) => {
+        const off = ctx.on('internal/service', (name: string) => {
+          if (name === 'mcpOAuth') {
+            const service = ctx.get('mcpOAuth')
+            if (service !== undefined) {
+              clearTimeout(timer)
+              off()
+              resolve(service)
+            }
+          }
+        })
+        const timer = setTimeout(() => {
+          off()
+          reject(new Error(
+            `mcp-client(${config.serverName}): oauth is configured but no mcpOAuth provider became available — add '@deepseek-ai/dsh-mcp-oauth-web' to the profile`,
+          ))
+        }, 30_000)
+        ctx.effect(() => () => {
+          clearTimeout(timer)
+        }, 'mcp-client.oauth-wait')
+      })
+    }
     const registered = mcpOAuth.register({
-      credentialId: mcpOAuthCredentialId(config.oauth.credentialId),
+      credentialId: mcpOAuthCredentialId(oauth.credentialId),
       serverUrl: new URL(config.url),
-      scopes: config.oauth.scopes,
-      label: config.oauth.label === '' ? config.serverName : config.oauth.label,
+      scopes: oauth.scopes,
+      label: oauth.label === '' ? config.serverName : oauth.label,
     })
     binding = registered
     ctx.effect(() => () => registered.dispose(), 'mcp-client.oauth-binding')
