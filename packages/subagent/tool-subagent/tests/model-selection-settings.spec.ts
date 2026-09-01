@@ -139,7 +139,7 @@ describe('SubagentModelSelectionConfig', () => {
     expect(ctx.subagentModelSelection.current()).toEqual({ enabled: false, defaultModel: undefined, allowedModels: [] })
 
     const invalid = Session.create(SessionId('empty-policy'))
-    invalid.append('subagent/model-selection-policy', { allowedModels: [] })
+    invalid.append('subagent/model-selection-policy', { allowedModels: [] } as never)
     expect(subagentModelSelectionPolicy(ctx.sessionProjections, invalid)).toBeUndefined()
 
     const malformed = Session.create(SessionId('malformed-policy'))
@@ -380,7 +380,10 @@ describe('SubagentModelSelectionConfig', () => {
       kind: 'enter', messages: [],
     })
 
-    disabled.session.append('subagent/model-selection-policy', { allowedModels: ALLOWED_MODELS })
+    disabled.session.append('subagent/model-selection-policy', {
+      defaultModel: ALLOWED_MODELS[0]!,
+      allowedModels: ALLOWED_MODELS,
+    })
     await expect(ctx.waterfall(ctx as never, 'agent/pre-step', payload, next))
       .resolves.toEqual({ kind: 'enter', messages: [] })
 

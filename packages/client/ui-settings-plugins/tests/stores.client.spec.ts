@@ -33,8 +33,9 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
     for (const op of ops) {
       const field = op.path[0]!
       if (op.op === 'set') {
-        value[field] = op.value
-        user[field] = op.value
+        const fieldValue = op.value === null ? undefined : op.value
+        value[field] = fieldValue
+        user[field] = fieldValue
       }
     }
     host.publish({ value: value as T, user })
@@ -434,6 +435,38 @@ describe('AgentLoopCardController', () => {
 })
 
 describe('SubagentModelSelectionCardController', () => {
+  it('exposes and stages the default model', async () => {
+    const host = stubSettingsScope<SubagentModelSelectionSettings>()
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {
+        enabled: true,
+        defaultModel: { provider: 'alpha', model: 'fast' },
+        allowedModels: [
+          { provider: 'alpha', model: 'fast' },
+          { provider: 'alpha', model: 'deep' },
+        ],
+      },
+      user: {},
+    })
+    const models = modelsApi({
+      groups: [{
+        id: 'alpha',
+        name: 'Alpha',
+        models: [{ id: 'fast', name: 'Fast' }, { id: 'deep', name: 'Deep' }],
+      }],
+    })
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
+    const face = controller.inject()
+    await vi.waitFor(() => { expect(face.hooks.subagentModelSelectionCard.getSnapshot().candidates).toHaveLength(2) })
+    expect(face.hooks.subagentModelSelectionCard.getSnapshot().defaultModelKey).toBe('alpha\0fast')
+
+    face.selectDefault('alpha\0deep')
+
+    expect(face.hooks.subagentModelSelectionCard.getSnapshot().defaultModelKey).toBe('alpha\0deep')
+  })
+
   it('joins stored routes with the live catalog without dropping unavailable choices', () => {
     const candidates = subagentModelCandidates(
       [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
@@ -462,7 +495,7 @@ describe('SubagentModelSelectionCardController', () => {
     const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 3,
-      value: { enabled: false, allowedModels: [] }, user: {},
+      value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {},
     })
     const face = controller.inject()
 
@@ -472,10 +505,12 @@ describe('SubagentModelSelectionCardController', () => {
       expect(face.hooks.subagentModelSelectionCard.getSnapshot().candidates).toHaveLength(1)
     })
     face.toggleModel('alpha\0fast')
+    face.selectDefault('alpha\0fast')
     face.save()
     await vi.waitFor(() => {
       expect(host.mutate).toHaveBeenCalledWith([
         { op: 'set', path: ['enabled'], value: true },
+        { op: 'set', path: ['defaultModel'], value: { provider: 'alpha', model: 'fast' } },
         { op: 'set', path: ['allowedModels'], value: [{ provider: 'alpha', model: 'fast' }] },
       ], 3)
     })
@@ -507,7 +542,7 @@ describe('SubagentModelSelectionCardController', () => {
       groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
     })
     const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
-    host.publish({ status: 'ready', writable: true, value: { enabled: false, allowedModels: [] }, user: {} })
+    host.publish({ status: 'ready', writable: true, value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {} })
     const face = controller.inject()
 
     face.toggleEnabled()
@@ -515,6 +550,7 @@ describe('SubagentModelSelectionCardController', () => {
       expect(face.hooks.subagentModelSelectionCard.getSnapshot().candidates).toHaveLength(1)
     })
     face.toggleModel('alpha\0fast')
+    face.selectDefault('alpha\0fast')
     face.save()
     await vi.waitFor(() => {
       expect(face.hooks.subagentModelSelectionCard.getSnapshot().failed).toBe(true)
@@ -536,7 +572,11 @@ describe('SubagentModelSelectionCardController', () => {
     const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 5,
-      value: { enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast' }] }, user: {},
+      value: {
+        enabled: true,
+        defaultModel: { provider: 'alpha', model: 'fast' },
+        allowedModels: [{ provider: 'alpha', model: 'fast' }],
+      }, user: {},
     })
     const face = controller.inject()
     const state = () => face.hooks.subagentModelSelectionCard.getSnapshot()
@@ -561,7 +601,11 @@ describe('SubagentModelSelectionCardController', () => {
     acceptWrites(host)
     host.publish({
       status: 'ready', writable: true, revision: 5,
-      value: { enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast' }] }, user: {},
+      value: {
+        enabled: true,
+        defaultModel: { provider: 'alpha', model: 'fast' },
+        allowedModels: [{ provider: 'alpha', model: 'fast' }],
+      }, user: {},
     })
     const models = modelsApi({
       groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
@@ -575,6 +619,7 @@ describe('SubagentModelSelectionCardController', () => {
     await vi.waitFor(() => {
       expect(host.mutate).toHaveBeenCalledWith([
         { op: 'set', path: ['enabled'], value: false },
+        { op: 'set', path: ['defaultModel'], value: { provider: 'alpha', model: 'fast' } },
         { op: 'set', path: ['allowedModels'], value: [{ provider: 'alpha', model: 'fast' }] },
       ], 5)
     })
@@ -587,7 +632,7 @@ describe('SubagentModelSelectionCardController', () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
     const models = modelsApi({ error: 'offline' })
     const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
-    host.publish({ status: 'ready', writable: true, value: { enabled: false, allowedModels: [] }, user: {} })
+    host.publish({ status: 'ready', writable: true, value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {} })
     const face = controller.inject()
     const state = () => face.hooks.subagentModelSelectionCard.getSnapshot()
 
@@ -605,7 +650,7 @@ describe('SubagentModelSelectionCardController', () => {
     const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 4,
-      value: { enabled: false, allowedModels: [] }, user: {},
+      value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {},
     })
     const face = controller.inject()
     face.toggleEnabled()
@@ -616,7 +661,11 @@ describe('SubagentModelSelectionCardController', () => {
 
     host.publish({
       revision: 5,
-      value: { enabled: true, allowedModels: [{ provider: 'other', model: 'new' }] },
+      value: {
+        enabled: true,
+        defaultModel: { provider: 'other', model: 'new' },
+        allowedModels: [{ provider: 'other', model: 'new' }],
+      },
     })
     expect(face.hooks.subagentModelSelectionCard.getSnapshot()).toMatchObject({
       conflicted: true, failed: false, dirty: true,
@@ -639,16 +688,21 @@ describe('SubagentModelSelectionCardController', () => {
     const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 4,
-      value: { enabled: false, allowedModels: [] }, user: {},
+      value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {},
     })
     const face = controller.inject()
     face.toggleEnabled()
     await vi.waitFor(() => { expect(face.hooks.subagentModelSelectionCard.getSnapshot().candidates).toHaveLength(1) })
     face.toggleModel('alpha\0fast')
+    face.selectDefault('alpha\0fast')
 
     host.publish({
       revision: 5,
-      value: { enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast' }] },
+      value: {
+        enabled: true,
+        defaultModel: { provider: 'alpha', model: 'fast' },
+        allowedModels: [{ provider: 'alpha', model: 'fast' }],
+      },
     })
 
     expect(face.hooks.subagentModelSelectionCard.getSnapshot()).toMatchObject({
@@ -661,7 +715,7 @@ describe('SubagentModelSelectionCardController', () => {
     acceptWrites(host)
     host.publish({
       status: 'ready', writable: true, revision: 2,
-      value: { enabled: false, allowedModels: [] }, user: {},
+      value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {},
     })
     const refreshed = deferred<never>()
     const models = vi.fn()
@@ -694,10 +748,12 @@ describe('SubagentModelSelectionCardController', () => {
       expect.objectContaining({ key: 'alpha\0fast', available: false, selected: true }),
     ])
 
+    face.selectDefault('alpha\0fast')
     face.save()
     await vi.waitFor(() => {
       expect(host.mutate).toHaveBeenCalledWith([
         { op: 'set', path: ['enabled'], value: true },
+        { op: 'set', path: ['defaultModel'], value: { provider: 'alpha', model: 'fast' } },
         { op: 'set', path: ['allowedModels'], value: [{ provider: 'alpha', model: 'fast' }] },
       ], 2)
     })
@@ -710,7 +766,7 @@ describe('SubagentModelSelectionCardController', () => {
     })
     host.publish({
       status: 'ready', writable: true, revision: 4,
-      value: { enabled: false, allowedModels: [] }, user: {},
+      value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {},
     })
     const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     const face = controller.inject()
@@ -721,7 +777,11 @@ describe('SubagentModelSelectionCardController', () => {
     controller.resetConnection()
     host.publish({
       revision: 4,
-      value: { enabled: true, allowedModels: [{ provider: 'other', model: 'new' }] },
+      value: {
+        enabled: true,
+        defaultModel: { provider: 'other', model: 'new' },
+        allowedModels: [{ provider: 'other', model: 'new' }],
+      },
     })
 
     expect(face.hooks.subagentModelSelectionCard.getSnapshot()).toMatchObject({
@@ -736,7 +796,7 @@ describe('SubagentModelSelectionCardController', () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
     host.publish({
       status: 'ready', writable: true, revision: 1,
-      value: { enabled: true, allowedModels: [] }, user: {},
+      value: { enabled: true, defaultModel: undefined, allowedModels: [] }, user: {},
     })
     const models = vi.fn()
       .mockResolvedValueOnce({
@@ -783,16 +843,18 @@ describe('SubagentModelSelectionCardController', () => {
 
     face.save()
     face.toggleModel('alpha\0fast')
-    host.publish({ status: 'ready', writable: true, value: { enabled: false, allowedModels: [] }, user: {} })
+    host.publish({ status: 'ready', writable: true, value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {} })
     face.save()
     face.toggleEnabled()
     await vi.waitFor(() => { expect(face.hooks.subagentModelSelectionCard.getSnapshot().catalogStatus).toBe('ready') })
     face.save()
     face.toggleModel('alpha\0fast')
+    face.selectDefault('alpha\0fast')
     face.save()
     expect(face.hooks.subagentModelSelectionCard.getSnapshot().saving).toBe(true)
     face.toggleEnabled()
     face.toggleModel('alpha\0fast')
+    face.selectDefault('alpha\0fast')
     face.save()
     face.discard()
     controller.dispose()
@@ -803,7 +865,7 @@ describe('SubagentModelSelectionCardController', () => {
 
   it('suppresses duplicate directory loads and late settlements', async () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
-    host.publish({ status: 'ready', writable: true, value: { enabled: false, allowedModels: [] }, user: {} })
+    host.publish({ status: 'ready', writable: true, value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {} })
 
     const pending = deferred<never>()
     const models = vi.fn(() => pending.promise)
@@ -833,11 +895,12 @@ describe('SubagentModelSelectionCardController', () => {
   it('ignores writes while read-only and scope notifications after disposal', () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
     const controller = new SubagentModelSelectionCardController(host.scope, modelsApi().ctx)
-    host.publish({ status: 'ready', writable: false, value: { enabled: false, allowedModels: [] }, user: {} })
+    host.publish({ status: 'ready', writable: false, value: { enabled: false, defaultModel: undefined, allowedModels: [] }, user: {} })
     const face = controller.inject()
 
     face.toggleEnabled()
     face.toggleModel('alpha\0fast')
+    face.selectDefault('alpha\0fast')
     face.save()
     expect(host.mutate).not.toHaveBeenCalled()
 
@@ -847,7 +910,11 @@ describe('SubagentModelSelectionCardController', () => {
     face.toggleEnabled()
     face.retryCatalog()
     face.save()
-    host.publish({ value: { enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast' }] } })
+    host.publish({ value: {
+      enabled: true,
+      defaultModel: { provider: 'alpha', model: 'fast' },
+      allowedModels: [{ provider: 'alpha', model: 'fast' }],
+    } })
     expect(host.mutate).not.toHaveBeenCalled()
     expect(face.hooks.subagentModelSelectionCard.getSnapshot().enabled).toBe(false)
   })

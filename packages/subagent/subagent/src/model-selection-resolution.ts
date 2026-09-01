@@ -23,10 +23,7 @@ export async function resolveChildRoute(
   const policy = projections === undefined
     ? undefined
     : subagentModelSelectionPolicy(projections, parent.session)
-  const hasSelection = requested?.provider !== undefined
-    || requested?.model !== undefined
-    || requested?.reasoningEffort !== undefined
-  if (policy === undefined && !hasSelection) return requested
+  if (policy === undefined) return requested
 
   const hasProvider = requested?.provider !== undefined
   const hasModel = requested?.model !== undefined

@@ -66,19 +66,16 @@ describe('subagentModelSelectionPolicy projection', () => {
   it('rejects an empty route list at fold time', () => {
     const invalid = Session.create(SessionId('empty-policy'))
     invalid.append('subagent/model-selection-policy', { defaultModel: DEFAULT, allowedModels: [] })
-    expect(() => subagentModelSelectionProjectionDefinition.apply(
-      subagentModelSelectionProjectionDefinition.init(invalid.header),
-      invalid.events[0]!,
-    )).toThrow('requires at least one route')
+    const initial = subagentModelSelectionProjectionDefinition.init()
+    expect(() => subagentModelSelectionProjectionDefinition.apply(initial, invalid.events[0]!))
+      .toThrow('requires at least one route')
   })
 
   it('degrades an old-format event without a default to no policy', () => {
     const legacy = Session.create(SessionId('legacy-policy'))
     legacy.append('subagent/model-selection-policy', { allowedModels: [DEFAULT] } as never)
-    const state = subagentModelSelectionProjectionDefinition.apply(
-      subagentModelSelectionProjectionDefinition.init(legacy.header),
-      legacy.events[0]!,
-    )
+    const initial = subagentModelSelectionProjectionDefinition.init()
+    const state = subagentModelSelectionProjectionDefinition.apply(initial, legacy.events[0]!)
     expect(state).toBeNull()
   })
 })

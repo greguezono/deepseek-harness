@@ -68,7 +68,9 @@ async function setupListTool(routes = [
   await ctx.plugin(LlmRuntime)
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
-  registerListSubagentModels(ctx, { routes })
+  const defaultModel = routes[0]
+  if (defaultModel === undefined) throw new Error('test route list must not be empty')
+  registerListSubagentModels(ctx, { defaultModel, routes })
   return ctx
 }
 
@@ -78,6 +80,7 @@ async function setupAllowedListTool() {
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
   registerListSubagentModels(ctx, {
+    defaultModel: { provider: 'alpha', model: 'fast' },
     routes: [
       { provider: 'alpha', model: 'fast' },
       { provider: 'alpha', model: 'unlisted' },
@@ -115,7 +118,10 @@ describe('list_subagent_models', () => {
     await ctx.plugin(SystemPrompt)
     await ctx.plugin(ToolRuntime)
     await ctx.plugin(SubagentRuntime)
-    registerListSubagentModels(ctx, { routes: [{ provider: 'alpha', model: 'fast' }] })
+    registerListSubagentModels(ctx, {
+      defaultModel: { provider: 'alpha', model: 'fast' },
+      routes: [{ provider: 'alpha', model: 'fast' }],
+    })
     const result = await call(ctx, {})
     expect(result.isError).toBe(true)
     expect(text(result)).toContain('`llm` service is unavailable')
@@ -124,7 +130,10 @@ describe('list_subagent_models', () => {
   it('rejects two discovery-owning instances in one tool scope', async () => {
     const ctx = await setupListTool()
     expect(() => {
-      registerListSubagentModels(ctx, { routes: [{ provider: 'alpha', model: 'fast' }] })
+      registerListSubagentModels(ctx, {
+        defaultModel: { provider: 'alpha', model: 'fast' },
+        routes: [{ provider: 'alpha', model: 'fast' }],
+      })
     }).toThrow('tool "list_subagent_models" is already registered')
   })
 

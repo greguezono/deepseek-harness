@@ -28,8 +28,8 @@ class RouteAdapter extends LlmAdapter {
 
   override listModels(): Promise<LlmModelInfo[]> {
     return Promise.resolve([
-      { id: DEFAULT.model, name: DEFAULT.model },
-      { id: OTHER.model, name: OTHER.model },
+      { provider: DEFAULT.provider, id: DEFAULT.model, name: DEFAULT.model },
+      { provider: OTHER.provider, id: OTHER.model, name: OTHER.model },
     ])
   }
 
