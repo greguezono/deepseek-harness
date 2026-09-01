@@ -298,11 +298,8 @@ export function startConnection(
         ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
         return
       }
-      // Authorization failure: pause reconnection without consuming the attempt
-      // budget. The binding flips to `sign-in-required` via noteUnauthorized,
-      // and the onStatusChange listener enters the wait state. A 401 during an
-      // established connection also surfaces as UnauthorizedError here when the
-      // SDK's own refresh path fails.
+      // Authorization failure: pause reconnection without consuming the
+      // attempt budget. The onStatusChange listener enters the wait state.
       if (binding !== undefined && error instanceof UnauthorizedError) {
         client = undefined
         clientClosed = undefined
@@ -338,13 +335,11 @@ export function startConnection(
     connectedAt = undefined
     failedAttempts = 0
     const current = client
-    const currentClosed = clientClosed
     client = undefined
     clientClosed = undefined
     if (current !== undefined) {
       try { void current.close() } catch { /* transport already gone */ }
     }
-    void currentClosed
     syncChain = syncChain.then(() => {
       for (const dispose of disposers.values()) dispose()
       disposers = new Map()
@@ -354,9 +349,8 @@ export function startConnection(
   /** The in-flight (or last settled) connection attempt; dispose awaits it for quiescence. */
   let settling: Promise<void>
 
-  // The onStatusChange listener is always registered when a binding is present:
-  // it resumes on `authorized` and pauses on `sign-in-required` regardless of
-  // the initial status. The startup decision (connect vs. wait) is separate.
+  // Resume on `authorized`, pause on `sign-in-required`; the startup
+  // decision (connect vs. wait) is separate.
   let disposeStatusListener: (() => void) | undefined
   if (binding !== undefined) {
     disposeStatusListener = binding.onStatusChange((status) => {
@@ -372,9 +366,8 @@ export function startConnection(
     ctx.effect(() => () => disposeStatusListener?.(), 'mcp-client.oauth-status')
   }
 
-  // When an OAuth binding is set and not yet authorized, the supervisor enters
-  // the wait state instead of connecting. Sign-in-required is not a startup
-  // error, so `ready` settles `{}` and `failOnStartupError` never fires on it.
+  // Sign-in-required is a wait state, not a startup error: `ready` settles
+  // `{}` and `failOnStartupError` never fires on it.
   if (binding !== undefined && binding.status().state !== 'authorized') {
     settling = Promise.resolve()
   } else {

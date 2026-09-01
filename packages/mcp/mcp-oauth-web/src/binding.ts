@@ -105,7 +105,9 @@ class BindingClientProvider implements OAuthClientProvider {
   }
 
   async invalidateCredentials(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery'): Promise<void> {
-    await this.binding.invalidateScope(scope)
+    if (scope === 'all' || scope === 'tokens') {
+      await this.binding.invalidateScope(scope)
+    }
   }
 }
 
@@ -269,19 +271,10 @@ export class Binding implements McpOAuthBinding {
     this.attempt.session.notify({ message: 'Open this page to sign in', url: String(url) })
   }
 
-  /** Persist the PKCE verifier and the pending block before the URL is published. */
+  /** Persist the PKCE verifier before the URL is published. */
   async saveCodeVerifier(codeVerifier: string): Promise<void> {
     if (this.attempt === undefined) throw new Error('no authorization attempt is running')
     this.attempt.codeVerifier = codeVerifier
-    const redirectUri = this.provider.redirectUrl
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-    await this.modifyGrant(payload => ({
-      serverUrl: this.serverUrl.toString(),
-      scopes: this.scopes,
-      ...(payload?.clientInformation !== undefined ? { clientInformation: payload.clientInformation } : {}),
-      ...(payload?.tokens !== undefined ? { tokens: payload.tokens } : {}),
-      pending: { state: this.attempt?.state ?? '', codeVerifier, redirectUri, expiresAt },
-    }))
   }
 
   /** @returns the PKCE verifier for the running attempt. */
@@ -296,7 +289,6 @@ export class Binding implements McpOAuthBinding {
       serverUrl: this.serverUrl.toString(),
       scopes: this.scopes,
       ...(payload?.tokens !== undefined ? { tokens: payload.tokens } : {}),
-      ...(payload?.pending !== undefined ? { pending: payload.pending } : {}),
       clientInformation: info,
     }))
   }
@@ -313,28 +305,17 @@ export class Binding implements McpOAuthBinding {
   }
 
   /** Clear credentials per the SDK's invalidation scope. */
-  async invalidateScope(scope: 'all' | 'client' | 'tokens' | 'verifier' | 'discovery'): Promise<void> {
+  async invalidateScope(scope: 'all' | 'tokens'): Promise<void> {
     if (scope === 'all') {
       await this.credentials.deleteRecord(this.key)
       return
     }
-    if (scope === 'tokens') {
-      await this.modifyGrant((payload) => {
-        if (payload === undefined) return undefined
-        const next = { ...payload }
-        delete next.tokens
-        return next
-      })
-      return
-    }
-    if (scope === 'client') {
-      await this.modifyGrant((payload) => {
-        if (payload === undefined) return undefined
-        const next = { ...payload }
-        delete next.clientInformation
-        return next
-      })
-    }
+    await this.modifyGrant((payload) => {
+      if (payload === undefined) return undefined
+      const next = { ...payload }
+      delete next.tokens
+      return next
+    })
   }
 
   /** Read and validate the stored grant; a stale payload reads as absent. */

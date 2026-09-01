@@ -9,22 +9,12 @@
 
 import type { OAuthClientInformationMixed, OAuthTokens } from '@modelcontextprotocol/sdk/shared/auth.js'
 
-/** Per-attempt data persisted before the authorization URL is published. */
-export interface GrantPending {
-  state: string
-  codeVerifier: string
-  redirectUri: string
-  expiresAt: string
-}
-
-/** The stored grant: registration facts, registered client, tokens, and any in-flight attempt. */
+/** The stored grant: registration facts, registered client, and tokens. */
 export interface GrantPayload {
   serverUrl: string
   scopes: readonly string[]
   clientInformation?: OAuthClientInformationMixed
   tokens?: OAuthTokens
-  savedAt?: string
-  pending?: GrantPending
 }
 
 /** Registration facts a stored payload must match to be usable. */
@@ -44,8 +34,8 @@ function scopesEqual(a: readonly string[], b: readonly string[]): boolean {
 }
 
 /**
- * Serialize a grant payload for storage: stamps `savedAt` and returns a
- * JSON-serializable copy with scopes as a plain array.
+ * Serialize a grant payload for storage: a JSON-serializable copy with scopes
+ * as a plain array.
  * @param payload - the grant to store.
  * @returns the opaque JSON value for `GrantRecord.payload`.
  */
@@ -55,8 +45,6 @@ export function serializeGrantPayload(payload: GrantPayload): unknown {
     scopes: [...payload.scopes],
     ...payload.clientInformation === undefined ? {} : { clientInformation: payload.clientInformation },
     ...payload.tokens === undefined ? {} : { tokens: payload.tokens },
-    ...payload.pending === undefined ? {} : { pending: payload.pending },
-    savedAt: new Date().toISOString(),
   }
 }
 
@@ -70,7 +58,7 @@ export function serializeGrantPayload(payload: GrantPayload): unknown {
  */
 export function parseGrantPayload(raw: unknown, facts: GrantBindingFacts): GrantPayload | undefined {
   if (!isPlainObject(raw)) return undefined
-  const { serverUrl, scopes, clientInformation, tokens, pending, savedAt } = raw
+  const { serverUrl, scopes, clientInformation, tokens } = raw
   if (typeof serverUrl !== 'string' || serverUrl !== facts.serverUrl) return undefined
   if (!Array.isArray(scopes) || !scopes.every(s => typeof s === 'string') || !scopesEqual(scopes, facts.scopes)) {
     return undefined
@@ -81,16 +69,10 @@ export function parseGrantPayload(raw: unknown, facts: GrantBindingFacts): Grant
     if (!isPlainObject(tokens)) return undefined
     if (typeof tokens.access_token !== 'string') return undefined
   }
-  if (pending !== undefined) {
-    if (!isPlainObject(pending)) return undefined
-    if (typeof pending.state !== 'string' || typeof pending.codeVerifier !== 'string') return undefined
-  }
   return {
     serverUrl,
     scopes: scopes as string[],
     ...clientInformation === undefined ? {} : { clientInformation: clientInformation as OAuthClientInformationMixed },
     ...tokens === undefined ? {} : { tokens: tokens as OAuthTokens },
-    ...pending === undefined ? {} : { pending: pending as unknown as GrantPending },
-    ...typeof savedAt === 'string' ? { savedAt } : {},
   }
 }

@@ -3,9 +3,8 @@
  * @module @deepseek-ai/dsh-mcp-oauth-web/invariant
  */
 
-/* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
-import type { InvariantFailure, InvariantInstaller } from '@deepseek-ai/dsh-invariants'
+import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-mcp-oauth-web'
 
@@ -15,26 +14,13 @@ export const name = 'mcp-oauth-web-invariant'
 export const inject = ['invariants']
 
 /**
- * Assert the status/registry relation the provider emits: a
- * `mcp-oauth/status-changed` event names a credential id that a live binding
- * owns. The plan's ideal check — `describeRecord` confirms a stored grant
- * exists for `authorized` — is async, and `fail()` throws synchronously, so a
- * sync listener cannot await it. The binding-liveness check is the
- * sync-safe downgrade; grant-record existence stays the credentials seam's
- * own commit-confirmation concern.
+ * No runtime invariant: the `mcp-oauth/status-changed` event/registry relation
+ * is owned by the `dsh-mcp-oauth` Service Definition package, which declares
+ * the event. A provider-specific grant-existence check would need async
+ * `readRecord`, but `fail()` throws synchronously. The binding-liveness check
+ * the Service Definition invariant already runs is the sync-safe version.
  */
-const install: InvariantInstaller = (ctx: Context, fail: InvariantFailure) => {
-  ctx.on('mcp-oauth/status-changed', (credentialId) => {
-    const service = ctx.get('mcpOAuth')
-    if (service === undefined) {
-      fail(`mcp-oauth/status-changed for "${credentialId}" emitted without a live mcpOAuth service`)
-      return
-    }
-    if (!service.list().some(entry => entry.credentialId === credentialId)) {
-      fail(`mcp-oauth/status-changed for "${credentialId}" names no live binding — status outlived its registration`)
-    }
-  })
-}
+const install: InvariantInstaller = () => {}
 
 /**
  * Register this package's invariant companion.
@@ -43,4 +29,3 @@ const install: InvariantInstaller = (ctx: Context, fail: InvariantFailure) => {
  */
 export const apply = (ctx: Context): Promise<() => void> =>
   Promise.resolve(ctx.invariants.register(PACKAGE_NAME, install))
-/* jscpd:ignore-end */

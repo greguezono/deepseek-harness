@@ -181,11 +181,9 @@ export const Config: z<ConfigInput, Config> = Object.assign(
   } as z<ConfigInput, Config>,
   configSchema,
   {
-    // The Loader validates config through the Standard Schema interface
-    // (`runtime.Config['~standard'].validate`). `~standard` lives on the
-    // schemastery prototype, so the `Object.assign` above drops it; re-attach
-    // it with a `validate` that runs the same parse + OAuth post-check as the
-    // wrapper, so a cordis.yml entry fails loud on the same misconfigurations.
+    // `~standard` lives on the schemastery prototype, so `Object.assign`
+    // drops it; re-attach with a `validate` that runs the same parse +
+    // OAuth post-check so cordis.yml entries fail loud on misconfiguration.
     '~standard': {
       vendor: configStandard.vendor,
       version: configStandard.version,
@@ -234,15 +232,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
     return () => void names.delete(config.serverName)
   }, 'mcp-client.serverName')
 
-  // Acquire the OAuth binding before starting the supervisor. The mcpOAuth
-  // service is kept out of `inject` so non-OAuth deployments run without the
-  // seam. When `oauth` is configured and the service is not yet registered
-  // (mcp-oauth-web activates in parallel and waits for its own inject
-  // dependencies), listen for the `internal/service` event. A 30s timeout
-  // fails loud when the provider is absent from the profile. The mcp-oauth
-  // peer is optional, so its value import is deferred to this call site.
-  // The effect disposer returns a single Disposable — see
-  // vendor/cordis/src/fiber.ts:74-93.
+  // Acquire the OAuth binding before starting the supervisor. mcpOAuth stays
+  // out of `inject` so non-OAuth deployments run without the seam. When the
+  // service is not yet registered (parallel boot), listen for
+  // `internal/service`; a 30s timeout fails loud when the provider is absent.
   let binding: (McpOAuthBinding & { dispose(): void }) | undefined
   if (config.transport === 'streamable-http' && config.oauth !== undefined) {
     const oauth = config.oauth
