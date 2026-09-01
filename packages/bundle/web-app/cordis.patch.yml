@@ -105,6 +105,28 @@
     - id: authorization-controller
       name: '@deepseek-ai/dsh-api-authorization-controller'
 
+    # OAuth capability for Streamable HTTP MCP servers: SDK discovery, dynamic
+    # registration, PKCE, the shared /oauth/mcp/callback route, and grants in
+    # the credentials record store. The redirect URI is loopback-derived.
+    - id: mcp-oauth
+      name: '@deepseek-ai/dsh-mcp-oauth-web'
+
+    # Safe OAuth MCP surface over Typert Remote: list/signOut for the tab.
+    - id: mcp-oauth-controller
+      name: '@deepseek-ai/dsh-mcp-oauth/controller'
+
+    # Example OAuth MCP server (uncomment and adjust):
+    # - id: mcp-datadog
+    #   name: '@deepseek-ai/dsh-mcp-client'
+    #   config:
+    #     transport: streamable-http
+    #     serverName: datadog
+    #     url: https://mcp.datadoghq.com/api/unstable/mcp-server/mcp?toolsets=all
+    #     oauth:
+    #       credentialId: datadog
+    #       scopes: [mcp_all]
+    #       label: Datadog
+
     # Workspace commands and reconnect-safe projection over Typert Remote.
     - id: workspace-controller
       name: '@deepseek-ai/dsh-api-workspace-controller'
@@ -212,6 +234,9 @@
 
     - id: ui-settings-plugin-inventory
       name: '@deepseek-ai/dsh-client-ui-settings-plugin-inventory'
+
+    - id: ui-settings-authorization
+      name: '@deepseek-ai/dsh-client-ui-settings-authorization'
 
     - id: ui-conversation
       name: '@deepseek-ai/dsh-client-ui-conversation'

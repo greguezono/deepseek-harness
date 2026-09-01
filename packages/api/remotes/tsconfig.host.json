@@ -58,6 +58,9 @@
       "path": "../../interaction/user-questions"
     },
     {
+      "path": "../../mcp/mcp-oauth"
+    },
+    {
       "path": "../../runtime-diagnostics/invariants"
     },
     {

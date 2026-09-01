@@ -756,6 +756,9 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-mcp-oauth':
+        specifier: workspace:^
+        version: link:../../mcp/mcp-oauth
       '@deepseek-ai/dsh-message-feedback':
         specifier: workspace:^
         version: link:../../feedback/message-feedback
@@ -1624,6 +1627,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-settings':
         specifier: workspace:^
         version: link:../../client/ui-settings
+      '@deepseek-ai/dsh-client-ui-settings-authorization':
+        specifier: workspace:^
+        version: link:../../client/ui-settings-authorization
       '@deepseek-ai/dsh-client-ui-settings-general':
         specifier: workspace:^
         version: link:../../client/ui-settings-general
@@ -1702,6 +1708,15 @@ importers:
       '@deepseek-ai/dsh-launch-environment':
         specifier: workspace:^
         version: link:../../util/launch-environment
+      '@deepseek-ai/dsh-mcp-client':
+        specifier: workspace:^
+        version: link:../../mcp/mcp-client
+      '@deepseek-ai/dsh-mcp-oauth':
+        specifier: workspace:^
+        version: link:../../mcp/mcp-oauth
+      '@deepseek-ai/dsh-mcp-oauth-web':
+        specifier: workspace:^
+        version: link:../../mcp/mcp-oauth-web
       '@deepseek-ai/dsh-message-feedback':
         specifier: workspace:^
         version: link:../../feedback/message-feedback

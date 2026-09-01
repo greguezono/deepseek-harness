@@ -76,6 +76,9 @@
       "path": "../authorization-controller"
     },
     {
+      "path": "../../mcp/mcp-oauth"
+    },
+    {
       "path": "../workspace-controller/tsconfig.client.json"
     },
     {
