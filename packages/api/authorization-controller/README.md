@@ -63,8 +63,9 @@ None, as this is a Remote surface over a human-facing sign-in seam and registers
 
 No direct effect; reading or writing authorization state does not alter model requests already in flight.
 
-<a id="known-limitations-and-deferred-work"></a>
 ## Known Limitations and Deferred Work
+
+<a id="known-limitations-and-deferred-work"></a>
 
 - **No headless caller** — an `AuthorizationInteraction` that declines every prompt is future work, so a headless profile cannot drive sign-in.
 - **Attempts do not survive Host restart** — a running attempt is in-memory; a restart drops its pending prompts without settling the stream.
