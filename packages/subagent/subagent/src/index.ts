@@ -78,6 +78,7 @@ import { listChildren as listSubagentChildren, listDescendants as listSubagentDe
 import type { SubagentDescendantListEntry, SubagentListEntry } from './list-children.ts'
 import { snapshotSubagentDescriptor } from './descriptor.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
+import { subagentModelSelectionProjectionDefinition } from './model-selection-state.ts'
 
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
@@ -138,6 +139,9 @@ export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 export type { SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'
+export { subagentModelSelectionProjectionDefinition, subagentModelSelectionPolicy, recordSubagentModelSelection } from './model-selection-state.ts'
+export type { AllowedModelRoute, ModelSelectionPolicy } from './model-selection.ts'
+export { assertAllowedModelRoutes, assertModelSelectionPolicy, modelRouteKey } from './model-selection.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -223,6 +227,7 @@ export class SubagentRuntime extends TypertRemoteService {
     ctx.inject(['sessionProjections'], (projectionCtx) => {
       projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition)
+      projectionCtx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
     })
   }
 
