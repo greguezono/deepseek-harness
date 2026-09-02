@@ -64,6 +64,9 @@ kind: "package-reference"
 | `reconnect.initialDelayMs` | `500` | 首次重连延迟；每次连续失败尝试翻倍 |
 | `reconnect.maxDelayMs` | `30,000` | 退避上限；同时是重置尝试预算所需的正常运行时长 |
 | `reconnect.maxAttempts` | `10` | 每次中断内连续失败尝试次数上限，超出后放弃 |
+| `oauth.credentialId` | — | streamable-http：`ctx.mcpOAuth` 的稳定授权 id（`[a-z][a-z0-9-]*`）；存在即激活 OAuth 消费路径 |
+| `oauth.scopes` | `[]` | 请求的 scope；为空则省略 scope 参数 |
+| `oauth.label` | `serverName` | 授权流程与状态界面的用户可见标签 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-mcp-client)是每个受支持字段及其 JSDoc 的穷尽式真源。
 
@@ -89,6 +92,27 @@ kind: "package-reference"
 服务器的工具会在 harness 开始首个轮次之前出现。服务器更改工具列表时，模型的工具集会自动更新；更新失败时，上一组工具继续可用。
 
 服务器连接断开时——例如本地服务器进程崩溃——插件会以从 500 ms 起逐次翻倍、上限 30 s 的延迟自动重连，并刷新工具集；重连进度在日志中可见。中断期间最后已知的工具仍会列出，但对它们的调用会失败，直到服务器恢复。连续失败十次后，该服务器的工具会被移除，重连停止，直到你重载配置或重启 harness；服务器持续连接一段时间后，该计数会重置。设置 `reconnect.enabled: false` 可禁用自动重连——此时工具在断开后仍会列出，但调用失败，直到你重载。编辑配置项会在原地重载服务器连接，未变的名称保持不变。
+
+### OAuth 保护的服务器
+
+Streamable HTTP 配置项可以声明 `oauth` 块，而非静态 `Authorization` 标头。设置 `oauth` 后，插件通过 `ctx.mcpOAuth`（由 `@deepseek-ai/dsh-mcp-oauth-web` 提供）获取绑定；绑定的传输通过 SDK 的 OAuth 客户端 provider 附加并刷新令牌。
+
+```yaml
+- id: mcp-datadog
+  name: '@deepseek-ai/dsh-mcp-client'
+  config:
+    transport: streamable-http
+    serverName: datadog
+    url: https://mcp.datadoghq.com/api/unstable/mcp-server/mcp?toolsets=all
+    oauth:
+      credentialId: datadog
+      scopes: [mcp_all]
+      label: Datadog
+```
+
+缺少用户授权是等待状态：插件成功启动，不注册工具，也不消耗重连预算。服务器返回 401（需要授权）时，监督器暂停重连；授权提交后以全新连接恢复。仅当希望非授权类启动失败中止激活时，才为 OAuth 配置项设置 `failOnStartupError: true`——等待状态本身绝不触发它。
+
+OAuth 仅适用于 Streamable HTTP，不能与静态 `Authorization` 标头共存。每个 `credentialId` 一个授权；活跃配置项不能共享 `credentialId`。未安装 `mcpOAuth` provider 时声明 `oauth` 块，会在激活时响亮地失败该配置项。
 
 -----
 
@@ -194,6 +218,7 @@ kind: "package-reference"
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。
 - **不强制执行不受支持的 MCP 输出 schema**——已声明 schema 使用 harness 子集之外的词汇时，`structuredContent` 回退为 `JsonValue`。
 - **要求基于任务的 MCP 工具在调用时被拒绝**——要求使用基于任务的执行（task-based execution）扩展的工具会抛出异常而非被桥接；该扩展未实现。
+- **OAuth 仅限 Streamable HTTP**——stdio 配置项不能声明 `oauth` 块，每个 `credentialId` 一个授权由 provider 强制执行。
 
 <a id="dev-note"></a>
 ### 开发备注

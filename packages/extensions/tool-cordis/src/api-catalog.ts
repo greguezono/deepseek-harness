@@ -549,6 +549,35 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'authorizationController',
+    summary: 'Host service backing the generated `ctx.remote.authorization` namespace.',
+    description: 'Host service backing the generated `ctx.remote.authorization` namespace. One live attempt per key (the seam\'s own rule); prompts are answered by `respond`, addressed by the promptId the stream carried.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') list(): readonly AuthorizationEntryView[]',
+        description: 'List every registered authorization flow as a wire view, in registration order.',
+        parameters: [],
+        returns: 'the wire views of all registered flows.',
+      },
+      {
+        signature: '@Remote({ mode: \'stream\' }) async *begin(request: AuthorizationBeginRequest, signal: AbortSignal): AsyncIterable<AuthorizationBeginFrame>',
+        description: 'Run one attempt and stream its notices, prompts, and final outcome.',
+        parameters: [{ name: 'request', description: 'the key and optional method.' }, { name: 'signal', description: 'carrier cancellation; a dropped connection withdraws the attempt.' }],
+        returns: 'frames ending with exactly one `outcome`.',
+      },
+      {
+        signature: '@Remote(\'respond\') respond(request: AuthorizationRespondRequest): void',
+        description: 'Settle one pending prompt with the human\'s answer or decline.',
+        parameters: [{ name: 'request', description: 'key, promptId, and exactly one of answer/declined.' }],
+      },
+      {
+        signature: '@Remote(\'cancel\') cancel(request: { key: string }): void',
+        description: 'Withdraw the attempt running for a key; a no-op when none runs.',
+        parameters: [{ name: 'request', description: 'the key whose attempt should stop.' }],
+      },
+    ],
+  },
+  {
     key: 'clientModules',
     summary: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows.',
     description: 'The web plugin table service: incremental `dsh.client` scan + wire composition + bundle route + index injection rows. Construction runs the activation scan synchronously — a malformed declaration or missing bundle among the already-loaded entries aggregates into one loud throw (FAILED fiber; the boot activation audit reports it).',
@@ -1202,6 +1231,50 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Select a provider by the file\'s extension and run one query. Selection is per-query and order-independent; no match throws `LspError` `LSP_UNAVAILABLE`.',
         parameters: [{ name: 'request', description: 'the normalized query.' }, { name: 'signal', description: 'optional cancellation forwarded to the selected provider.' }],
         returns: 'the normalized, closed-union result.',
+      },
+    ],
+  },
+  {
+    key: 'mcpOAuth',
+    summary: 'Abstract MCP OAuth service.',
+    description: 'Abstract MCP OAuth service. A provider owns discovery, registration, PKCE, callback handling, token exchange/refresh, grant persistence, and the per-binding authorization flow; it rejects duplicate live credential ids at `register` and removes the binding\'s status contribution on disposal.',
+    methods: [
+      {
+        signature: 'abstract register(registration: McpOAuthRegistration): McpOAuthBinding & { dispose(): void }',
+        description: 'Register one OAuth MCP binding. Effect-scoped by the caller: disposing the returned binding\'s registration withdraws its flow and status.',
+        parameters: [{ name: 'registration', description: 'id, resource URL, scopes, and label.' }],
+        returns: 'the live binding.',
+        throws: ['Error when the credential id is already live.'],
+      },
+      {
+        signature: 'abstract list(): readonly McpOAuthEntry[]',
+        description: 'List every live binding\'s safe entry, in registration order.',
+        parameters: [],
+        returns: 'the safe entries of all live bindings.',
+      },
+      {
+        signature: 'abstract signOut(credentialId: McpOAuthCredentialId): Promise<void>',
+        description: 'Delete one binding\'s local grant; the binding returns to `sign-in-required`.',
+        parameters: [{ name: 'credentialId', description: 'the binding to sign out.' }],
+        throws: ['Error when no live binding has that id.'],
+      },
+    ],
+  },
+  {
+    key: 'mcpOAuthController',
+    summary: 'Host service backing the generated `ctx.remote.mcpOAuth` namespace.',
+    description: 'Host service backing the generated `ctx.remote.mcpOAuth` namespace.',
+    methods: [
+      {
+        signature: '@Remote(\'list\') list(): readonly McpOAuthEntry[]',
+        description: 'List every live binding\'s safe entry.',
+        parameters: [],
+        returns: 'the safe entries of all live bindings.',
+      },
+      {
+        signature: '@Remote(\'signOut\') async signOut(request: { credentialId: string }): Promise<void>',
+        description: 'Delete one binding\'s local grant.',
+        parameters: [{ name: 'request', description: 'the binding\'s credential id.' }],
       },
     ],
   },
@@ -3184,6 +3257,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'options', description: 'the full request. A LOOP-built request carries the process-local {@link markAgentLoopRequest} identity and arrives deep-frozen (mutation throws): its content is a pure function of the session log (the reconstructability Agent Note), so listeners read it, never rewrite it. Hand-built calls do not carry that marker; their messages already obey the immutable creation contract.' }],
   },
   {
+    name: 'mcp-oauth/status-changed',
+    mode: 'emit',
+    signature: '\'mcp-oauth/status-changed\'(credentialId: string, status: McpOAuthStatus): void',
+    summary: 'One binding\'s safe status changed (registration, sign-in progress, grant commit, invalidation, sign-out).',
+    description: 'One binding\'s safe status changed (registration, sign-in progress, grant commit, invalidation, sign-out). Fired only after the durable state it reports is committed.',
+    parameters: [{ name: 'credentialId', description: 'the affected binding\'s credential id as a string.' }, { name: 'status', description: 'the new safe status.' }],
+  },
+  {
     name: 'session-telemetry/record',
     mode: 'waterfall',
     signature: '\'session-telemetry/record\'(record: SessionTelemetryRecord, next: () => SessionTelemetryRecord): SessionTelemetryRecord',
@@ -3556,8 +3637,20 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type AttachmentId = Branded<\'AttachmentId\'>;',
   },
   {
+    name: 'AuthorizationBeginFrame',
+    declaration: 'export type AuthorizationBeginFrame = {\n    kind: \'notice\';\n    message: string;\n    url?: string;\n    code?: string;\n} | {\n    kind: \'prompt\';\n    promptId: string;\n    prompt: AuthorizationPromptView;\n} | {\n    kind: \'prompt-withdrawn\';\n    promptId: string;\n} | {\n    kind: \'outcome\';\n    status: AuthorizationSettlement;\n    message?: string;\n};',
+  },
+  {
+    name: 'AuthorizationBeginRequest',
+    declaration: 'export interface AuthorizationBeginRequest {\n    key: string;\n    method?: string;\n}',
+  },
+  {
     name: 'AuthorizationEntry',
     declaration: 'export interface AuthorizationEntry {\n    key: CredentialKey;\n    label: string;\n    methods: readonly AuthorizationMethod[];\n    inFlight: boolean;\n}',
+  },
+  {
+    name: 'AuthorizationEntryView',
+    declaration: 'export interface AuthorizationEntryView {\n    key: string;\n    label: string;\n    methods: readonly {\n        id: string;\n        label: string;\n    }[];\n    inFlight: boolean;\n}',
   },
   {
     name: 'AuthorizationFlow',
@@ -3588,8 +3681,16 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface AuthorizationPromptOption {\n    id: string;\n    label: string;\n    description?: string;\n}',
   },
   {
+    name: 'AuthorizationPromptView',
+    declaration: 'export type AuthorizationPromptView = {\n    kind: \'text\';\n    message: string;\n    placeholder?: string;\n} | {\n    kind: \'secret\';\n    message: string;\n    placeholder?: string;\n} | {\n    kind: \'select\';\n    message: string;\n    options: readonly AuthorizationPromptOption[];\n};',
+  },
+  {
     name: 'AuthorizationRequest',
     declaration: 'export interface AuthorizationRequest {\n    key: CredentialKey;\n    method?: string;\n    interaction: AuthorizationInteraction;\n    signal?: AbortSignal;\n}',
+  },
+  {
+    name: 'AuthorizationRespondRequest',
+    declaration: 'export interface AuthorizationRespondRequest {\n    key: string;\n    promptId: string;\n    answer?: string;\n    declined?: boolean;\n}',
   },
   {
     name: 'AuthorizationSession',
@@ -4394,6 +4495,26 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ManualCompactAgentContext',
     declaration: 'export interface ManualCompactAgentContext extends CompactionAgentContext {\n    runMaintenance<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T>;\n}',
+  },
+  {
+    name: 'McpOAuthBinding',
+    declaration: 'export interface McpOAuthBinding {\n    createTransport(headers: Record<string, string>): Transport;\n    status(): McpOAuthStatus;\n    onStatusChange(listener: (status: McpOAuthStatus) => void): () => void;\n    noteUnauthorized(): void;\n    invalidate(): Promise<void>;\n}',
+  },
+  {
+    name: 'McpOAuthCredentialId',
+    declaration: 'export type McpOAuthCredentialId = Branded<\'McpOAuthCredentialId\'>;',
+  },
+  {
+    name: 'McpOAuthEntry',
+    declaration: 'export interface McpOAuthEntry {\n    credentialId: string;\n    key: string;\n    label: string;\n    serverUrl: string;\n    status: McpOAuthStatus;\n    loopbackOnly: boolean;\n}',
+  },
+  {
+    name: 'McpOAuthRegistration',
+    declaration: 'export interface McpOAuthRegistration {\n    credentialId: McpOAuthCredentialId;\n    serverUrl: URL;\n    scopes: readonly string[];\n    label: string;\n}',
+  },
+  {
+    name: 'McpOAuthStatus',
+    declaration: 'export type McpOAuthStatus = {\n    state: \'sign-in-required\';\n} | {\n    state: \'authorizing\';\n} | {\n    state: \'authorized\';\n} | {\n    state: \'error\';\n    message: string;\n};',
   },
   {
     name: 'Message',

@@ -489,6 +489,25 @@ function walkSchemaExpr(
       }
       return
     }
+    // `Object.assign(fn, schema, …)`: a wrapper that re-attaches `~standard`
+    // onto a schemastery function. The base schema is the second argument; if
+    // it is a local const, resolve to its initializer before visiting.
+    if (method === 'assign' && call.arguments[1]) {
+      const schemaArg = unwrapExpr(call.arguments[1])
+      if (ts.isIdentifier(schemaArg)) {
+        for (const stmt of ctx.sf.statements) {
+          if (!ts.isVariableStatement(stmt)) continue
+          for (const decl of stmt.declarationList.declarations) {
+            if (ts.isIdentifier(decl.name) && decl.name.text === schemaArg.text && decl.initializer) {
+              visit(decl.initializer)
+              return
+            }
+          }
+        }
+      }
+      if (ts.isCallExpression(schemaArg)) { visit(schemaArg); return }
+      return
+    }
     // A chained refinement (`z.object({…}).default(…)` etc.): the keys live on
     // the call the chain hangs off — keep unwrapping toward it.
     const base = unwrapExpr(call.expression.expression)

@@ -21,6 +21,7 @@ export const API_REMOTE_FORWARDED_EVENTS = [
   { event: 'api-session/error', mode: 'emit' },
   { event: 'api-session/removed', mode: 'emit' },
   { event: 'api-session/status', mode: 'emit' },
+  { event: 'authorization/settled', mode: 'emit' },
   { event: 'commands/change', mode: 'emit' },
   { event: 'credentials/reference-updated', mode: 'emit' },
   { event: 'cordis/request-run', mode: 'emit' },
@@ -30,6 +31,7 @@ export const API_REMOTE_FORWARDED_EVENTS = [
   { event: 'cordis/inspect-query', mode: 'emit' },
   { event: 'cordis/inspect-query-resolved', mode: 'emit' },
   { event: 'llm/adapters-updated', mode: 'emit' },
+  { event: 'mcp-oauth/status-changed', mode: 'emit' },
   { event: 'settings/document-updated', mode: 'emit' },
   { event: 'user-questions/request', mode: 'waterfall' },
 ] as const satisfies readonly TypertForwardableEventEntry[]

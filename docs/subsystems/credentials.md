@@ -122,6 +122,42 @@ async begin(request: AuthorizationRequest): Promise<AuthorizationOutcome>
 
 Source: [`packages/credentials/authorization/src/index.ts`](../../packages/credentials/authorization/src/index.ts)
 
+<a id="ctxauthorizationcontroller--authorizationcontroller"></a>
+
+### `ctx.authorizationController` — `AuthorizationController`
+
+Host service backing the generated `ctx.remote.authorization` namespace. One live attempt per key (the seam's own rule); prompts are answered by `respond`, addressed by the promptId the stream carried.
+
+```ts cordis-catalog
+/**
+ * List every registered authorization flow as a wire view, in registration order.
+ * @returns the wire views of all registered flows.
+ */
+@Remote('list') list(): readonly AuthorizationEntryView[]
+
+/**
+ * Run one attempt and stream its notices, prompts, and final outcome.
+ * @param request - the key and optional method.
+ * @param signal - carrier cancellation; a dropped connection withdraws the attempt.
+ * @returns frames ending with exactly one `outcome`.
+ */
+@Remote({ mode: 'stream' }) async *begin(request: AuthorizationBeginRequest, signal: AbortSignal): AsyncIterable<AuthorizationBeginFrame>
+
+/**
+ * Settle one pending prompt with the human's answer or decline.
+ * @param request - key, promptId, and exactly one of answer/declined.
+ */
+@Remote('respond') respond(request: AuthorizationRespondRequest): void
+
+/**
+ * Withdraw the attempt running for a key; a no-op when none runs.
+ * @param request - the key whose attempt should stop.
+ */
+@Remote('cancel') cancel(request: { key: string }): void
+```
+
+Source: [`packages/api/authorization-controller/src/index.ts`](../../packages/api/authorization-controller/src/index.ts)
+
 <a id="ctxcredentials--credentialprovider-abstract-seam"></a>
 
 ### `ctx.credentials` — `CredentialProvider` (abstract seam)
@@ -253,6 +289,60 @@ Host service backing the generated `ctx.remote.credentials` namespace. It carrie
 
 Source: [`packages/api/settings-controller/src/credentials.ts`](../../packages/api/settings-controller/src/credentials.ts)
 
+<a id="ctxmcpoauth--mcpoauthservice-abstract-seam"></a>
+
+### `ctx.mcpOAuth` — `McpOAuthService` (abstract seam)
+
+Abstract MCP OAuth service. A provider owns discovery, registration, PKCE, callback handling, token exchange/refresh, grant persistence, and the per-binding authorization flow; it rejects duplicate live credential ids at `register` and removes the binding's status contribution on disposal.
+
+```ts cordis-catalog
+/**
+ * Register one OAuth MCP binding. Effect-scoped by the caller: disposing
+ * the returned binding's registration withdraws its flow and status.
+ * @param registration - id, resource URL, scopes, and label.
+ * @returns the live binding.
+ * @throws Error when the credential id is already live.
+ */
+abstract register(registration: McpOAuthRegistration): McpOAuthBinding & { dispose(): void }
+
+/**
+ * List every live binding's safe entry, in registration order.
+ * @returns the safe entries of all live bindings.
+ */
+abstract list(): readonly McpOAuthEntry[]
+
+/**
+ * Delete one binding's local grant; the binding returns to `sign-in-required`.
+ * @param credentialId - the binding to sign out.
+ * @throws Error when no live binding has that id.
+ */
+abstract signOut(credentialId: McpOAuthCredentialId): Promise<void>
+```
+
+Source: [`packages/mcp/mcp-oauth/src/index.ts`](../../packages/mcp/mcp-oauth/src/index.ts)
+
+<a id="ctxmcpoauthcontroller--mcpoauthcontroller"></a>
+
+### `ctx.mcpOAuthController` — `McpOAuthController`
+
+Host service backing the generated `ctx.remote.mcpOAuth` namespace.
+
+```ts cordis-catalog
+/**
+ * List every live binding's safe entry.
+ * @returns the safe entries of all live bindings.
+ */
+@Remote('list') list(): readonly McpOAuthEntry[]
+
+/**
+ * Delete one binding's local grant.
+ * @param request - the binding's credential id.
+ */
+@Remote('signOut') async signOut(request: { credentialId: string }): Promise<void>
+```
+
+Source: [`packages/mcp/mcp-oauth/src/controller.ts`](../../packages/mcp/mcp-oauth/src/controller.ts)
+
 <a id="authorization-events"></a>
 
 ### `authorization/*` events
@@ -326,4 +416,28 @@ Committed change to a provider-managed credential source: a `set`, an `unset`, o
 ```
 
 Source: [`packages/credentials/credentials/src/types.ts`](../../packages/credentials/credentials/src/types.ts)
+
+<a id="mcp-oauth-events"></a>
+
+### `mcp-oauth/*` events
+
+<a id="mcp-oauthstatus-changed--emit"></a>
+
+#### `mcp-oauth/status-changed` — emit
+
+One binding's safe status changed (registration, sign-in progress, grant commit, invalidation, sign-out). Fired only after the durable state it reports is committed.
+
+```ts cordis-catalog
+/**
+ * One binding's safe status changed (registration, sign-in progress,
+ * grant commit, invalidation, sign-out). Fired only after the durable
+ * state it reports is committed.
+ * @mode emit
+ * @param credentialId - the affected binding's credential id as a string.
+ * @param status - the new safe status.
+ */
+'mcp-oauth/status-changed'(credentialId: string, status: McpOAuthStatus): void
+```
+
+Source: [`packages/mcp/mcp-oauth/src/types.ts`](../../packages/mcp/mcp-oauth/src/types.ts)
 <!-- END GENERATED cordis-surface -->

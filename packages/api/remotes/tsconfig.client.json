@@ -25,6 +25,9 @@
 
     },
     {
+      "path": "../../credentials/authorization"
+    },
+    {
       "path": "../../context/file-reference"
     },
     {
@@ -68,6 +71,12 @@
     },
     {
       "path": "../settings-controller"
+    },
+    {
+      "path": "../authorization-controller"
+    },
+    {
+      "path": "../../mcp/mcp-oauth"
     },
     {
       "path": "../workspace-controller/tsconfig.client.json"

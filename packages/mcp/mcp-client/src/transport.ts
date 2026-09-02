@@ -10,6 +10,7 @@ import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { scrubbedParentEnv } from '@deepseek-ai/dsh-subprocess'
+import type { McpOAuthBinding } from '@deepseek-ai/dsh-mcp-oauth'
 import type { Config } from './index.ts'
 
 /**
@@ -26,9 +27,10 @@ function buildChildEnv(extra: Record<string, string>): Record<string, string> {
  * Create an MCP transport from the resolved plugin config.
  *
  * @param config - Resolved plugin config discriminated on `transport`.
+ * @param binding - OAuth binding for a streamable-http entry; when set, the binding owns the transport (token attachment and refresh).
  * @returns A connected-ready MCP Transport (stdio or Streamable HTTP).
  */
-export function createTransport(config: Config): Transport {
+export function createTransport(config: Config, binding?: McpOAuthBinding): Transport {
   switch (config.transport) {
     case 'stdio':
       return new StdioClientTransport({
@@ -38,6 +40,7 @@ export function createTransport(config: Config): Transport {
         cwd: config.cwd,
       })
     case 'streamable-http':
+      if (binding !== undefined) return binding.createTransport(config.headers)
       // The MCP SDK's StreamableHTTPClientTransport has optional callback
       // properties typed without `| undefined` (exactOptionalPropertyTypes
       // mismatch with the Transport interface); the SDK constructed the
