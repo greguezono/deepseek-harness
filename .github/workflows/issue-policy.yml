@@ -14,6 +14,11 @@ permissions:
 jobs:
   policy:
     name: Issue policy
+    # config.json targets deepseek-harness/deepseek-harness by number, so a
+    # clone or personal fork would validate an unrelated PR/issue at that
+    # number instead of its own. Skip there for a clean pass rather than a
+    # wrong or failing check.
+    if: ${{ github.repository == 'deepseek-harness/deepseek-harness' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out trusted policy

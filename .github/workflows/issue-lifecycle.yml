@@ -41,6 +41,12 @@ jobs:
     # are gated at step level (a skipped step does not gray the job): only a
     # changes_requested review drives the Project board; approved/commented
     # reviews never mint a write-capable App token.
+    #
+    # The job-level `if` guards a separate concern: the App token and
+    # config.json both target deepseek-harness/deepseek-harness. A clone or
+    # personal fork has neither the org vars/secrets nor matching PR/issue
+    # numbers, so it skips (a clean pass) instead of failing.
+    if: ${{ github.repository == 'deepseek-harness/deepseek-harness' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out trusted policy

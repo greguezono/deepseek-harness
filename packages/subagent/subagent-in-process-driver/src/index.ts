@@ -21,8 +21,8 @@ import { createUserMessage, type ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   appendDelegatedPolicyOverrides,
   applyChildComposition,
-  assertSubagentMaxDepth,
   captureDelegatedPolicyOverrides,
+  assertSubagentMaxDepth,
   childSessionMeta,
   finalAssistantOutput,
   resolveChildAgentOptions,
@@ -113,13 +113,10 @@ export async function startInProcessRun(
   const seed = options.seed
   const activationBoundary = seed?.length ?? 0
 
-  // Capture before the first await: a later parent switch belongs to the
-  // parent's future.
-  const inherited = captureDelegatedPolicyOverrides(parent)
-
+  const delegatedPolicies = request.delegatedPolicies ?? captureDelegatedPolicyOverrides(parent)
   let structured: StructuredAttachment | undefined
   const setup = (childCtx: Context): void => {
-    appendDelegatedPolicyOverrides((childCtx.agent as Agent).session, inherited)
+    appendDelegatedPolicyOverrides((childCtx.agent as Agent).session, delegatedPolicies)
     applyChildComposition(childCtx, parent, {
       persona: request.persona,
       toolFilter: request.toolFilter,

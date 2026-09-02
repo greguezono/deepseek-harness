@@ -4,10 +4,20 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-settings'
 import {
-  AllowedModelRouteSchema,
   assertAllowedModelRoutes,
+  assertModelSelectionPolicy,
   type AllowedModelRoute,
-} from './model-selection.ts'
+} from '@deepseek-ai/dsh-subagent'
+
+function allowedModelRouteSchema(): z<AllowedModelRoute> {
+  return z.object({
+    provider: z.string().min(1).required(),
+    model: z.string().min(1).required(),
+  })
+}
+
+/** Schema shared by the Host setting and its deployment base. */
+export const AllowedModelRouteSchema: z<AllowedModelRoute> = allowedModelRouteSchema()
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -23,6 +33,8 @@ export const SUBAGENT_MODEL_SELECTION_SETTINGS_NAMESPACE = 'subagent-model-selec
 export interface SubagentModelSelectionSettings {
   /** Whether newly composed top-level Sessions receive model selection. */
   enabled: boolean
+  /** Default child route applied when a caller omits provider and model. */
+  defaultModel: AllowedModelRoute | undefined
   /** Exact child LLM routes offered to newly composed top-level Sessions. */
   allowedModels: AllowedModelRoute[]
 }
@@ -30,6 +42,7 @@ export interface SubagentModelSelectionSettings {
 /** Schema served to settings clients for the opt-in preference. */
 export const SUBAGENT_MODEL_SELECTION_SETTINGS_SCHEMA: z<SubagentModelSelectionSettings> = z.object({
   enabled: z.boolean().default(false),
+  defaultModel: z.union([allowedModelRouteSchema(), z.const(undefined)]),
   allowedModels: z.array(AllowedModelRouteSchema).default([]),
 })
 
@@ -37,6 +50,8 @@ export const SUBAGENT_MODEL_SELECTION_SETTINGS_SCHEMA: z<SubagentModelSelectionS
 export interface Config {
   /** Initial enabled state inherited when the user document does not override it. */
   enabled?: boolean
+  /** Initial default route inherited when the user document does not override it. */
+  defaultModel: AllowedModelRoute | undefined
   /** Initial route list inherited when the user document does not override it. */
   allowedModels?: AllowedModelRoute[]
 }
@@ -45,17 +60,19 @@ export interface Config {
 export class SubagentModelSelectionConfig extends Service {
   static Config: z<Config> = z.object({
     enabled: z.boolean().default(false),
+    defaultModel: z.union([allowedModelRouteSchema(), z.const(undefined)]),
     allowedModels: z.array(AllowedModelRouteSchema).default([]),
   })
 
   private source: () => SubagentModelSelectionSettings
 
-  constructor(ctx: Context, config: Config = {}) {
+  constructor(ctx: Context, config: Config = { defaultModel: undefined }) {
     super(ctx, 'subagentModelSelection')
     // Cordis supplies the schema default; the fallback also covers direct construction.
     /* v8 ignore next */
     const entry: SubagentModelSelectionSettings = {
       enabled: config.enabled ?? false,
+      defaultModel: config.defaultModel,
       allowedModels: config.allowedModels ?? [],
     }
     this.validate(entry)
@@ -79,20 +96,24 @@ export class SubagentModelSelectionConfig extends Service {
 
   /**
    * Read a detached selection preference for the next eligible Agent publication.
-   * @returns the enabled state and exact allowed routes.
+   * @returns the enabled state, default route, and exact allowed routes.
    */
   current(): SubagentModelSelectionSettings {
     const current = this.source()
     return {
       enabled: current.enabled,
+      defaultModel: current.defaultModel === undefined ? undefined : { ...current.defaultModel },
       allowedModels: current.allowedModels.map(route => ({ ...route })),
     }
   }
 
   private validate(value: SubagentModelSelectionSettings): void {
     assertAllowedModelRoutes(value.allowedModels)
-    if (value.enabled && value.allowedModels.length === 0) {
-      throw new Error('enabled subagent model selection requires at least one allowed model')
+    if (value.enabled) {
+      assertModelSelectionPolicy({
+        defaultModel: value.defaultModel,
+        allowedModels: value.allowedModels,
+      })
     }
   }
 }

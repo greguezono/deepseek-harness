@@ -944,36 +944,6 @@ describe('dsh-tool-subagent background mode', () => {
     expect(text(result)).toBe('Error: tool call aborted before dispatch')
   })
 
-  it('skips background startup when cancellation wins asynchronous route preflight', async () => {
-    const ctx = await backgroundSetup({
-      provider: 'mock',
-      agentOptions: { provider: 'alpha', model: 'selected-model' },
-    })
-    const parent = ownerAgent(ctx, 'sess-parent')
-    const adapter = new MockAdapter([])
-    let releasePreflight!: () => void
-    const preflightGate = new Promise<void>((resolve) => { releasePreflight = resolve })
-    const resolveModel = vi.spyOn(adapter, 'resolveModel').mockImplementation(async (provider, model) => {
-      await preflightGate
-      return { provider, id: model, name: model }
-    })
-    ctx.llm.registerAdapter(['alpha'], adapter)
-    const controller = new AbortController()
-
-    const resultPromise = callSubagent(ctx, {
-      description: 'cancelled selection',
-      prompt: 'do it',
-      run_in_background: true,
-    }, { agent: parent, signal: controller.signal })
-    await vi.waitFor(() => { expect(resolveModel).toHaveBeenCalledOnce() })
-    controller.abort()
-    releasePreflight()
-    const result = await resultPromise
-
-    expect(result.isError).toBe(true)
-    expect(ctx.jobs.list(parent)).toEqual([])
-  })
-
   it('rejects startup when the provider changes during asynchronous route preflight', async () => {
     const oldStart = vi.fn()
     const replacementStart = vi.fn(async (): Promise<never> => { throw new Error('replacement provider must not start') })

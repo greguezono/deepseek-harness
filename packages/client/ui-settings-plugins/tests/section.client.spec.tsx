@@ -90,6 +90,7 @@ function renderSubagentModelSelection(state: Partial<SubagentModelSelectionCardS
   const store = createSnapshotStore<SubagentModelSelectionCardState>({
     ...settled,
     enabled: false,
+    defaultModelKey: undefined,
     candidates: [],
     catalogStatus: 'idle',
     catalogPartial: false,
@@ -99,6 +100,7 @@ function renderSubagentModelSelection(state: Partial<SubagentModelSelectionCardS
   const actions = {
     toggleEnabled: vi.fn(),
     toggleModel: vi.fn(),
+    selectDefault: vi.fn(),
     retryCatalog: vi.fn(),
     save: vi.fn(),
     discard: vi.fn(),
@@ -396,6 +398,8 @@ describe('SubagentModelSelectionCard', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Deep/ }))
     expect(actions.toggleModel).toHaveBeenCalledWith('alpha\0fast')
     expect(actions.toggleModel).toHaveBeenCalledWith('alpha\0deep')
+    fireEvent.click(screen.getByRole('radio', { name: /Fast/ }))
+    expect(actions.selectDefault).toHaveBeenCalledWith('alpha\0fast')
   })
 
   it('renders directory progress, failures, unavailable routes, and validation', () => {

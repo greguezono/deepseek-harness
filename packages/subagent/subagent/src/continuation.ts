@@ -181,6 +181,18 @@ interface ContinuationHost {
    */
   prepareContinuable(name: string, request: ContinuableCreateRequest): Promise<ContinuableCreateSpec>
   /**
+   * Resolve and authorize one child route before provider preparation.
+   * @param parent - delegating parent whose Session carries the policy.
+   * @param requested - per-child Agent options.
+   * @param signal - caller cancellation for adapter preflight.
+   * @returns requested options when disabled, otherwise the resolved authorized route.
+   */
+  resolveChildRoute(
+    parent: Agent,
+    requested: AgentOptions | undefined,
+    signal: AbortSignal,
+  ): Promise<AgentOptions | undefined>
+  /**
    * Build the lifecycle observer for one Activation's residency epoch.
    * @param provider - the provider name recorded in the durable descriptor.
    * @param childId - the durable child session id.
@@ -411,14 +423,17 @@ export class SubagentContinuationManager {
     const request = spec.request
     const parent = request.parent
     this.assertAdmitting(parent)
-    const persistence = this.requirePersistence()
     assertSubagentMaxDepth(request.maxDepth)
     const childId = spec.childId ?? brandString<SessionId>(randomUUID())
     this.assertChildIdAvailable(childId)
     const childDepth = resolveChildDepth(parent, request.maxDepth)
-    // Snapshot before any await: invalid descriptor JSON rejects the call
-    // before a child exists, and the detached value is what reaches the log.
-    const agentOptions = resolveChildAgentOptions(parent, request.agentOptions, childDepth)
+    const delegatedPolicies = captureDelegatedPolicyOverrides(parent, this.ctx)
+    const resolvedAgentOptions = await this.host.resolveChildRoute(parent, request.agentOptions, spec.signal)
+    spec.signal.throwIfAborted()
+    const persistence = this.requirePersistence()
+    // Snapshot before provider preparation: invalid descriptor JSON rejects the
+    // call before a child exists, and the detached value is what reaches the log.
+    const agentOptions = resolveChildAgentOptions(parent, resolvedAgentOptions, childDepth)
     const agentProvider = agentOptions.provider
     const agentModel = agentOptions.model
     const agentReasoningEffort = agentOptions.reasoningEffort
@@ -432,10 +447,6 @@ export class SubagentContinuationManager {
       ...request.persona !== undefined ? { persona: request.persona } : {},
       ...request.toolFilter !== undefined ? { toolFilter: request.toolFilter } : {},
     })
-    // Capture before the first await: a later parent switch belongs to the
-    // parent's future, not to this child.
-    const delegatedPolicies = captureDelegatedPolicyOverrides(parent)
-
     const prepared = await this.host.prepareContinuable(spec.provider, {
       sessionId: childId,
       parent,

@@ -16,7 +16,8 @@ export type PluginsSettingsLocaleKey =
   | 'subagentModelSelectionLoading' | 'subagentModelSelectionLoadFailed' | 'subagentModelSelectionRetry'
   | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
   | 'subagentModelSelectionUnavailableGroup' | 'subagentModelSelectionEmpty'
-  | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
+  | 'subagentModelSelectionRequired' | 'subagentModelSelectionDefault'
+  | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -69,7 +70,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionUnavailable: 'Currently unavailable',
   subagentModelSelectionUnavailableGroup: 'Saved but currently unavailable',
   subagentModelSelectionEmpty: 'No model provider currently advertises a model.',
-  subagentModelSelectionRequired: 'Select at least one model before saving.',
+  subagentModelSelectionRequired: 'Select at least one allowed model and choose the default before saving.',
+  subagentModelSelectionDefault: 'Default model for subagents (chosen from the allowed list above)',
   subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
   subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
 }
@@ -125,7 +127,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionUnavailable: '当前不可用',
   subagentModelSelectionUnavailableGroup: '已保存但当前不可用',
   subagentModelSelectionEmpty: '当前没有模型提供方公布模型。',
-  subagentModelSelectionRequired: '保存前请至少选择一个模型。',
+  subagentModelSelectionRequired: '保存前请至少选择一个允许模型，并指定默认模型。',
+  subagentModelSelectionDefault: 'Subagent 的默认模型（从上方允许列表中选择）',
   subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
   subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
 }

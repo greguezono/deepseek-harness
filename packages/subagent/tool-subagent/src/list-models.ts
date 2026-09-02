@@ -4,7 +4,7 @@ import type { Context } from '@deepseek-ai/cordis'
 import type LlmRuntime from '@deepseek-ai/dsh-llm'
 import type { LlmProviderInfo } from '@deepseek-ai/dsh-llm'
 import { defineTool } from '@deepseek-ai/dsh-tools'
-import type { ModelSelectionPolicy } from './model-selection.ts'
+import type { ModelSelectionPolicy } from '@deepseek-ai/dsh-subagent'
 
 interface ListSubagentModelsRequest {
   readonly provider?: string

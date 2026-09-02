@@ -47,6 +47,7 @@ export async function setup(toolConfig: SetupConfig, mockConfig: Partial<mock.Co
   if (withModelSelection === true) {
     await ctx.plugin(SubagentModelSelectionConfig, {
       enabled: true,
+      defaultModel: TEST_ALLOWED_MODELS[0]!,
       allowedModels: TEST_ALLOWED_MODELS,
     })
     await mountAgentLoopTestDependencies(ctx)

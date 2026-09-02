@@ -116,6 +116,8 @@ The caller-facing request does not carry catalog format details or continuation 
 interface ResolvedSubagentStartRequest extends SubagentStartRequest {
   /** Detached descriptor a session-backed provider persists in the child log. */
   readonly descriptor: SubagentDescriptorData
+  /** Parent policy values captured synchronously when delegation starts. */
+  readonly delegatedPolicies?: DelegatedPolicyOverrides
 }
 ```
 
@@ -506,7 +508,7 @@ Singleton settings owner read by delegation tools when an Agent is published.
 ```ts cordis-catalog
 /**
  * Read a detached selection preference for the next eligible Agent publication.
- * @returns the enabled state and exact allowed routes.
+ * @returns the enabled state, default route, and exact allowed routes.
  */
 current(): SubagentModelSelectionSettings
 ```

@@ -131,6 +131,25 @@ export function SubagentModelSelectionCard(props: SubagentModelSelectionCardProp
               : state.catalogStatus === 'ready'
                 ? <p className={css.notice}>{t('subagentModelSelectionEmpty')}</p>
                 : null}
+            {state.catalogStatus === 'ready' && state.candidates.some(candidate => candidate.selected)
+              ? (
+                <fieldset className={css.defaultModel}>
+                  <legend>{t('subagentModelSelectionDefault')}</legend>
+                  {state.candidates.filter(candidate => candidate.selected).map(candidate => (
+                    <label key={`default-${candidate.key}`}>
+                      <input
+                        type="radio"
+                        name="subagent-default-model"
+                        checked={state.defaultModelKey === candidate.key}
+                        disabled={!state.writable || state.saving}
+                        onChange={() => { props.selectDefault(candidate.key) }}
+                      />
+                      <span>{`${candidate.providerName} / ${candidate.modelName}`}</span>
+                    </label>
+                  ))}
+                </fieldset>
+              )
+              : null}
             {state.invalid ? <p className={css.invalid}>{t('subagentModelSelectionRequired')}</p> : null}
           </div>
         )

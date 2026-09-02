@@ -757,18 +757,20 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 ```ts persistence-catalog
 /**
- * Records that this session's delegation tool exposes child provider,
- * model, and reasoning-effort selection. Appended before the first model
- * request; absence means the fixed-route definition. Log-only: it carries
- * no `surfaceOp` and never enters model history.
+ * Records this session's child route-selection policy: the default route
+ * and the exact allowlist. Appended before the first child creation;
+ * absence means model selection is disabled. Log-only: it carries no
+ * `surfaceOp` and never enters model history.
  */
 'subagent/model-selection-policy': {
+  /** Default route applied when a child caller omits provider and model. */
+  defaultModel: AllowedModelRoute
   /** Exact routes this Session may select explicitly for a child. */
   allowedModels: AllowedModelRoute[]
 }
 ```
 
-来源：[`packages/subagent/tool-subagent/src/model-selection-state.ts:17`](../packages/subagent/tool-subagent/src/model-selection-state.ts)
+来源：[`packages/subagent/subagent/src/model-selection-state.ts:21`](../packages/subagent/subagent/src/model-selection-state.ts)
 
 ### `team/*`
 

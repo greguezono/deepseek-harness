@@ -35,7 +35,7 @@ import { scopeTarget } from '@deepseek-ai/dsh-scope'
 import type { Scoped } from '@deepseek-ai/dsh-scope'
 import { assertObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock, MessageId } from '@deepseek-ai/dsh-llm'
-import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { Agent, AgentOptions } from '@deepseek-ai/dsh-agent'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { canonicalClientTimeZone } from '@deepseek-ai/dsh-util-time'
 import { Remote, RemoteError, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
@@ -62,6 +62,7 @@ import type {
 } from './types.ts'
 import { SubagentError } from './error.ts'
 import { assertSubagentMaxDepth } from './depth.ts'
+import { captureDelegatedPolicyOverrides } from './child-agent.ts'
 import { createActivationObserver, createLifecycleEmitter, observeRun } from './lifecycle.ts'
 import type { ActivationObserver, LifecycleEmitter } from './lifecycle.ts'
 import SubagentContinuationManager from './continuation.ts'
@@ -78,6 +79,8 @@ import { listChildren as listSubagentChildren, listDescendants as listSubagentDe
 import type { SubagentDescendantListEntry, SubagentListEntry } from './list-children.ts'
 import { snapshotSubagentDescriptor } from './descriptor.ts'
 import { subagentIdentityProjectionDefinition, subagentTimingProjectionDefinition } from './projection.ts'
+import { subagentModelSelectionProjectionDefinition } from './model-selection-state.ts'
+import { resolveChildRoute } from './model-selection-resolution.ts'
 
 export * from './out-of-process.ts'
 export { AssistantOutputFold, finalAssistantOutput } from './assistant-output.ts'
@@ -138,6 +141,10 @@ export type * from './control-types.ts'
 export type { SubagentDescendantListEntry } from './list-children.ts'
 export type { SubagentRunEndInfo, SubagentRunInfo } from './types.ts'
 export type { SubagentIdentityProjection, SubagentTimingProjection } from './projection-types.ts'
+export { subagentModelSelectionProjectionDefinition, subagentModelSelectionPolicy, recordSubagentModelSelection } from './model-selection-state.ts'
+export type { AllowedModelRoute, ModelSelectionPolicy } from './model-selection.ts'
+export { assertAllowedModelRoutes, assertModelSelectionPolicy, modelRouteKey } from './model-selection.ts'
+export { resolveChildRoute } from './model-selection-resolution.ts'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -212,6 +219,7 @@ export class SubagentRuntime extends TypertRemoteService {
     ctx.inject(['agents'], (childCtx: Context) => {
       const manager = new SubagentContinuationManager(childCtx, {
         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
+        resolveChildRoute: (parent, requested, signal) => this.resolveChildRoute(parent, requested, signal),
         observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
       }, this.setupRegistry)
       this.continuations = manager
@@ -223,6 +231,7 @@ export class SubagentRuntime extends TypertRemoteService {
     ctx.inject(['sessionProjections'], (projectionCtx) => {
       projectionCtx.sessionProjections.register(subagentTimingProjectionDefinition)
       projectionCtx.sessionProjections.register(subagentIdentityProjectionDefinition)
+      projectionCtx.sessionProjections.register(subagentModelSelectionProjectionDefinition)
     })
   }
 
@@ -567,12 +576,24 @@ export class SubagentRuntime extends TypertRemoteService {
     this.assertCapabilities(provider, request)
     assertSubagentMaxDepth(request.maxDepth)
     if (request.outputSchema !== undefined) assertObjectJsonSchema(request.outputSchema)
+    const delegatedPolicies = captureDelegatedPolicyOverrides(request.parent, this.ctx)
+    const resolvedAgentOptions = await this.resolveChildRoute(request.parent, request.agentOptions, request.signal)
+    if (this.getProvider(name) !== provider) {
+      throw new Error(`subagent provider "${name}" changed while resolving the child LLM route; retry the delegation`)
+    }
     const descriptor = snapshotSubagentDescriptor({
       mode: 'one-shot',
       provider: name,
       ...request.label !== undefined ? { label: request.label } : {},
     })
-    const resolved: ResolvedSubagentStartRequest = { ...request, descriptor }
+    const resolved: ResolvedSubagentStartRequest = {
+      ...request,
+      ...(resolvedAgentOptions === undefined ? {} : { agentOptions: resolvedAgentOptions }),
+      descriptor,
+      ...(delegatedPolicies.sandboxMode === undefined && delegatedPolicies.approvalPolicy === undefined
+        ? {}
+        : { delegatedPolicies }),
+    }
     return observeRun(this.emitLifecycle, name, request.parent, await provider.start(resolved))
   }
 
@@ -603,6 +624,15 @@ export class SubagentRuntime extends TypertRemoteService {
       throw new SubagentError(`no subagent provider registered for "${name}"`, 'NO_PROVIDER')
     }
     return provider
+  }
+
+  /** Resolve and authorize one child route before provider work begins. */
+  private resolveChildRoute(
+    parent: Agent,
+    requested: AgentOptions | undefined,
+    signal: AbortSignal,
+  ): Promise<AgentOptions | undefined> {
+    return resolveChildRoute(this.ctx, parent, requested, signal)
   }
 
   /** Resolve the optional continuable-subagent manager or fail loud. */
